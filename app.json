@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yasi82.convecta"
+      "bundleIdentifier": "com.yasi82.convecta",
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
