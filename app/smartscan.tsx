@@ -11,7 +11,7 @@ export default function ConvectaScan() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  const player = useAudioPlayer(require('../../assets/ping.wav'));
+  const player = useAudioPlayer(require('../assets/ping.wav'));
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {

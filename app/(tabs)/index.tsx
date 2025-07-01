@@ -10,7 +10,6 @@ export default function Dashboard() {
       <Text style={styles.title}>Bienvenue, Simon !</Text>
       <Button title="Nouveau colis" onPress={() => router.push("/new")} />
       <Button title="Colis en attente" onPress={() => router.push("/pending")} />
-      <Button title="Ouvrir SmartScan" onPress={() => router.push("/smartscan")} />
     </View>
   );
 }
