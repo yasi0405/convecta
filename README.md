@@ -51,6 +51,32 @@ Join our community of developers creating universal apps.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
 
 
+## Issues during build
+# 1) from project root
+cd /Users/simonyannick/Apps/mobile/convecta
+
+# 2) fix ownership (sudo just for chown, not for pod/npm/expo)
+sudo chown -R "$(whoami)" .
+sudo chown -R "$(whoami)" ~/.cocoapods ~/Library/Caches/CocoaPods 2>/dev/null || true
+
+# 3) clean & reinstall JS deps (also fixes earlier npm lock mismatch)
+rm -rf node_modules package-lock.json
+npm install
+
+# 4) clean iOS pods and reinstall
+cd ios
+rm -rf Pods Podfile.lock
+pod repo update
+pod install --repo-update
+cd ..
+
+# 5) (optional) re-sync native config if needed
+npx expo prebuild --platform ios
+
+# 6) run on iOS – NO sudo
+npx expo run:ios        # or: npx expo run:ios --device
+
+
 ## Publish app
 
 eas update --branch main

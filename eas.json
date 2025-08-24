@@ -19,10 +19,7 @@
       "android": {
         "buildType": "apk"
       },
-      "channel": "main",
-      "hooks": {
-        "pre-install": "bash -lc 'cd ios && rm -rf Pods Podfile.lock && pod install --repo-update'"
-      }
+      "channel": "main"
     }
   },
   "submit": {
