@@ -57,7 +57,12 @@
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",
     "@aws-amplify/backend-cli": "^1.8.0",
-    "@babel/core": "^7.25.2",
+    "@babel/core": "7.26.0",
+    "@babel/types": "7.26.0",
+    "@babel/parser": "7.26.1",
+    "@babel/traverse": "7.25.9",
+    "@babel/generator": "7.26.0",
+    "@babel/template": "7.25.9",
     "@types/react": "~19.0.10",
     "aws-cdk-lib": "^2.189.1",
     "constructs": "^10.4.2",
