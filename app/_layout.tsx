@@ -11,7 +11,7 @@ import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
 
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { Button, StyleSheet, Text, View } from 'react-native';
+import { Button, StyleSheet, View } from 'react-native';
 import outputs from "../amplify_outputs.json";
 
 Amplify.configure(outputs);
@@ -38,19 +38,19 @@ export default function RootLayout() {
     );
   };
 
-  const UserInfo = () => {
-    const { user } = useAuthenticator();
+  // const UserInfo = () => {
+  //   const { user } = useAuthenticator();
 
-    if (!user) return null;
+  //   if (!user) return null;
 
-    const username = user?.username ?? 'N/A';
+  //   const username = user?.username ?? 'N/A';
 
-    return (
-      <View style={styles.userInfoContainer}>
-        <Text style={styles.userInfoText}>👤 Utilisateur : {username}</Text>
-      </View>
-    );
-  };
+  //   return (
+  //     <View style={styles.userInfoContainer}>
+  //       <Text style={styles.userInfoText}>👤 Utilisateur : {username}</Text>
+  //     </View>
+  //   );
+  // };
 
   return (
     <SafeAreaProvider>
@@ -60,7 +60,7 @@ export default function RootLayout() {
             <Authenticator>
               <SafeAreaView style={styles.container} edges={['top']}>
                 <SignOutButton />
-                <UserInfo />
+                {/* <UserInfo /> */}
                 <Stack>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                   <Stack.Screen name="+not-found" />
