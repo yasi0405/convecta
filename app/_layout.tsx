@@ -11,7 +11,7 @@ import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
 
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { Button, StyleSheet, Text } from 'react-native';
+import { Button, StyleSheet, Text, View } from 'react-native';
 import outputs from "../amplify_outputs.json";
 
 Amplify.configure(outputs);
@@ -32,9 +32,9 @@ export default function RootLayout() {
   const SignOutButton = () => {
     const { signOut } = useAuthenticator();
     return (
-      <SafeAreaView style={styles.signOutButton}>
+      <View style={styles.signOutButton}>
         <Button title="Sign Out" onPress={signOut} />
-      </SafeAreaView>
+      </View>
     );
   };
 
@@ -46,9 +46,9 @@ export default function RootLayout() {
     const username = user?.username ?? 'N/A';
 
     return (
-      <SafeAreaView style={styles.userInfoContainer}>
+      <View style={styles.userInfoContainer}>
         <Text style={styles.userInfoText}>👤 Utilisateur : {username}</Text>
-      </SafeAreaView>
+      </View>
     );
   };
 
@@ -58,7 +58,7 @@ export default function RootLayout() {
         <ThemeProvider>
           <Authenticator.Provider>
             <Authenticator>
-              <SafeAreaView style={styles.container}>
+              <SafeAreaView style={styles.container} edges={['top']}>
                 <SignOutButton />
                 <UserInfo />
                 <Stack>
