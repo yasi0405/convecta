@@ -2,7 +2,7 @@
   "expo": {
     "name": "convecta",
     "slug": "convecta",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "convecta",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yasi82.convecta",
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "adaptiveIcon": {
@@ -55,7 +55,7 @@
         "projectId": "87d19859-6b3f-4665-99fc-e47ffcb8b914"
       }
     },
-    "runtimeVersion": "1.0.3",
+    "runtimeVersion": "1.0.4",
     "updates": {
       "url": "https://u.expo.dev/87d19859-6b3f-4665-99fc-e47ffcb8b914"
     }
