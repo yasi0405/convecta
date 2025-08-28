@@ -1,7 +1,8 @@
+import Colors from "@/constants/Colors";
 import { generateClient } from "aws-amplify/data";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Button, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import type { Schema } from "../../amplify/data/resource";
 
 const BPOST_PRESETS = [
@@ -76,7 +77,7 @@ export default function NewParcel() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 80 }]}>
       <Text style={styles.title}>Colis disponibles</Text>
       {loading && (
         <View style={styles.centerRow}>
@@ -101,9 +102,9 @@ export default function NewParcel() {
           ListEmptyComponent={<Text style={styles.muted}>Aucun colis dispo pour le moment.</Text>}
         />
       )}
-      <View style={{ marginBottom: 24 }}>
-        <Button title="Rafraîchir la liste" onPress={loadParcels} />
-      </View>
+      <TouchableOpacity style={styles.button} onPress={loadParcels}>
+        <Text style={styles.buttonText}>Rafraîchir la liste</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>Type bpost (pré-enregistré)</Text>
       <View style={{ marginBottom: 12 }}>
         {BPOST_PRESETS.map((p) => (
@@ -121,34 +122,57 @@ export default function NewParcel() {
         ))}
       </View>
       <Text style={styles.title}>Nouveau colis</Text>
-      <TextInput style={styles.input} placeholder="Type de colis" value={type} onChangeText={setType} editable={false} />
-      <TextInput style={styles.input} placeholder="Poids (kg)" value={poids} onChangeText={setPoids} keyboardType="numeric" />
-      <TextInput style={styles.input} placeholder="Dimensions (cm)" value={dimensions} onChangeText={setDimensions} />
-      <TextInput style={styles.input} placeholder="Description" value={description} onChangeText={setDescription} />
-      <TextInput style={styles.input} placeholder="Adresse d’enlèvement" value={adresse} onChangeText={setAdresse} />
-      <Button title="Valider" onPress={handleSubmit} />
+      <TextInput style={styles.input} placeholder="Type de colis" value={type} onChangeText={setType} editable={false} placeholderTextColor={Colors.textSecondary} />
+      <TextInput style={styles.input} placeholder="Poids (kg)" value={poids} onChangeText={setPoids} keyboardType="numeric" placeholderTextColor={Colors.textSecondary} />
+      <TextInput style={styles.input} placeholder="Dimensions (cm)" value={dimensions} onChangeText={setDimensions} placeholderTextColor={Colors.textSecondary} />
+      <TextInput style={styles.input} placeholder="Description" value={description} onChangeText={setDescription} placeholderTextColor={Colors.textSecondary} />
+      <TextInput style={styles.input} placeholder="Adresse d’enlèvement" value={adresse} onChangeText={setAdresse} placeholderTextColor={Colors.textSecondary} />
+      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Valider</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: "#fff", flexGrow: 1 },
-  title: { fontSize: 22, marginBottom: 20, textAlign: "center" },
+  container: { padding: 20, backgroundColor: Colors.background, flexGrow: 1 },
+  title: { fontSize: 22, marginBottom: 20, textAlign: "center", color: Colors.text },
   input: {
-    borderColor: "#ccc",
+    backgroundColor: Colors.input,
+    borderColor: Colors.border,
     borderWidth: 1,
     borderRadius: 5,
     padding: 10,
     marginBottom: 15,
+    color: Colors.text,
   },
   centerRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  muted: { color: "#666", marginLeft: 8 },
+  muted: { color: Colors.textSecondary, marginLeft: 8 },
   error: { color: "#B00020", marginBottom: 12 },
-  card: { borderWidth: 1, borderColor: "#eee", borderRadius: 8, padding: 12, marginBottom: 10, backgroundColor: "#fafafa" },
-  cardTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  cardText: { fontSize: 14 },
+  card: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: Colors.card,
+  },
+  cardTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4, color: Colors.textOnCard },
+  cardText: { fontSize: 14, color: Colors.textOnCard },
   preset: { borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, marginBottom: 8, backgroundColor: "#fff" },
   presetActive: { borderColor: "#1e88e5", backgroundColor: "#e3f2fd" },
   presetLabel: { fontWeight: "600", marginBottom: 4 },
   presetHelp: { color: "#555", fontSize: 12 },
+  button: {
+    backgroundColor: Colors.button,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: Colors.buttonText,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
 });

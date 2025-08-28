@@ -10,8 +10,9 @@ import { ParcelProvider } from '@/src/context/ParcelContext';
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
 
+import Colors from "@/constants/Colors";
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { Button, StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import outputs from "../amplify_outputs.json";
 
 Amplify.configure(outputs);
@@ -21,7 +22,8 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const theme = useTheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'RussoOne-Regular': require('../assets/fonts/RussoOne-Regular.ttf'),
+    'Inter-Regular': require('../assets/fonts/Inter-Regular.ttf'),
   });
 
   if (!loaded) {
@@ -33,7 +35,9 @@ export default function RootLayout() {
     const { signOut } = useAuthenticator();
     return (
       <View style={styles.signOutButton}>
-        <Button title="Sign Out" onPress={signOut} />
+        <TouchableOpacity style={styles.button} onPress={signOut}>
+          <Text style={styles.buttonText}>Déconnexion</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -59,13 +63,13 @@ export default function RootLayout() {
           <Authenticator.Provider>
             <Authenticator>
               <SafeAreaView style={styles.container} edges={['top']}>
-                <SignOutButton />
-                {/* <UserInfo /> */}
-                <Stack>
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen name="+not-found" />
-                </Stack>
-                <StatusBar style="auto" />
+                  <SignOutButton />
+                  {/* <UserInfo /> */}
+                  <Stack>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="+not-found" />
+                  </Stack>
+                  <StatusBar style="auto" />
               </SafeAreaView>
             </Authenticator>
           </Authenticator.Provider>
@@ -78,10 +82,28 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#161D25',
+  },
+  defaultTextStyle: {
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
   },
   signOutButton: {
     alignSelf: "flex-end",
+  },
+  button: {
+    borderColor: Colors.accent,
+    borderWidth: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  buttonText: {
+    color: Colors.accent,
+    fontSize: 14,
+    fontWeight: "bold",
   },
   userInfoContainer: {
     marginTop: 10,
