@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { ParcelProvider } from '@/src/context/ParcelContext';
 
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
@@ -19,7 +18,6 @@ Amplify.configure(outputs);
 
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const theme = useTheme();
   const [loaded] = useFonts({
     'RussoOne-Regular': require('../assets/fonts/RussoOne-Regular.ttf'),
@@ -66,6 +64,7 @@ export default function RootLayout() {
                   <SignOutButton />
                   {/* <UserInfo /> */}
                   <Stack>
+                    <Stack.Screen name="index" options={{ headerShown: false }} />
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="+not-found" />
                   </Stack>

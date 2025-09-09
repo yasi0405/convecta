@@ -16,11 +16,13 @@
     "@aws-amplify/ui-react-core": "^3.4.3",
     "@aws-amplify/ui-react-native": "^2.6.0",
     "@expo/vector-icons": "^14.1.0",
+    "@mapbox/mapbox-gl-geocoder": "^5.1.2",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/netinfo": "^11.4.1",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
+    "@rnmapbox/maps": "^10.1.41",
     "aws-amplify": "^6.15.3",
     "expo": "~53.0.22",
     "expo-asset": "~11.1.7",
@@ -52,7 +54,8 @@
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
     "three": "^0.166.0",
-    "three-stdlib": "^2.32.1"
+    "three-stdlib": "^2.32.1",
+    "expo-location": "~18.1.6"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",
@@ -69,6 +72,7 @@
     "esbuild": "^0.25.6",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "mapbox-gl": "^2.15.0",
     "react-native-svg": "^15.12.1",
     "tsx": "^4.20.3",
     "typescript": "~5.8.3"
