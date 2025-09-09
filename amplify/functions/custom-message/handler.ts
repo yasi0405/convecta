@@ -27,6 +27,7 @@ export const handler: CustomMessageTriggerHandler = async (event) => {
             <a href="${link}" style="background:${BTN_BG};color:${BTN_TEXT};text-decoration:none;border-radius:8px;padding:12px 20px;display:inline-block;font-weight:700">Confirmer mon compte</a>
           </td></tr>
           <tr><td style="font-size:12px;opacity:.7">Si tu n’es pas à l’origine de cette demande, ignore ce message.</td></tr>
+          <tr><td style="font-size:12px;opacity:.7">PARRAINAGE</td></tr>
         </table>
       </td>
     </tr>

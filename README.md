@@ -82,3 +82,7 @@ npx expo run:ios        # or: npx expo run:ios --device
 eas update --branch main
 eas build --platform ios
 eas submit
+
+
+## Backend Amplify
+push back : sudo npx @aws-amplify/backend-cli sandbox
