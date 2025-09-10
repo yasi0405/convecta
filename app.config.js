@@ -13,6 +13,9 @@ export default ({ config }) => ({
       supportsTablet: true,
       bundleIdentifier: "com.yasi82.convecta",
       buildNumber: "4",
+      infoPlist: {
+        NSLocationWhenInUseUsageDescription: "Nous utilisons votre position pour centrer la carte et proposer des livraisons à proximité.",
+      },
     },
     android: {
       adaptiveIcon: {
@@ -45,6 +48,7 @@ export default ({ config }) => ({
         },
       ],
       "expo-audio",
+      "expo-location",
       "expo-asset",
       [
         "@rnmapbox/maps",

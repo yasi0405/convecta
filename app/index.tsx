@@ -4,7 +4,7 @@ import { Asset } from "expo-asset";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { SvgUri } from "react-native-svg";
 
 export const unstable_settings = {
@@ -54,10 +54,12 @@ export default function Dashboard() {
         style={styles.logo}
       />
       <View style={styles.mapContainer}>
-        <img
-          src={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center[0]},${center[1]},${zoom},0/800x600?access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}`}
-          alt="Carte de la ville"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        <Image
+          source={{ uri: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center[0]},${center[1]},${zoom},0/800x600?access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}` }}
+          accessible
+          accessibilityLabel="Carte de la ville"
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
         />
         <View style={styles.modeCard}>
           <View style={styles.switchRow}>
