@@ -14,7 +14,8 @@ install! 'cocoapods',
 prepare_react_native_project!
 
 # @generated begin @rnmapbox/maps-rnmapboxmapsimpl - expo prebuild (DO NOT MODIFY) sync-3063cf321d136b1d73333e2f7a82c97fdb341ef0
-$RNMapboxMapsDownloadToken = 'pk.eyJ1IjoieWFzaTgyIiwiYSI6ImNtMTZlZmIzMTBmOWcyanM4eTJzd2tpeTQifQ.9Ig2gQ6IBrKN8pwMbs8gJQ'
+$RNMapboxMapsDownloadToken = ENV['MAPBOX_DOWNLOADS_TOKEN']
+abort('MAPBOX_DOWNLOADS_TOKEN (sk with DOWNLOADS:READ) is required for Mapbox iOS pods') if !$RNMapboxMapsDownloadToken || $RNMapboxMapsDownloadToken.start_with?('pk.')
 $RNMapboxMapsImpl = 'mapbox'
 # @generated end @rnmapbox/maps-rnmapboxmapsimpl
 target 'convecta' do
