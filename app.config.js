@@ -54,7 +54,7 @@ export default ({ config }) => ({
         "@rnmapbox/maps",
         {
           RNMapboxMapsImpl: "mapbox",
-          RNMapboxMapsDownloadToken: process.env.EXPO_PUBLIC_MAPBOX_TOKEN,
+          RNMapboxMapsDownloadToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
         },
       ],
     ],
