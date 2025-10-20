@@ -1,18 +1,32 @@
 import React, { createContext, ReactNode, useState } from "react";
 
-// Définition du type Parcel
+// Statuts possibles d'un colis
+export type ParcelStatus = "AVAILABLE" | "ASSIGNED" | "DELIVERED";
+
+// Définition du type Parcel (mise à jour)
 export interface Parcel {
-  type: string;
-  poids: string;
-  dimensions: string;
-  description: string;
-  adresse: string;
+  id?: string;
+  type?: string;
+  poids?: number | string | null;
+  dimensions?: string | null;
+  description?: string | null;
+
+  // ⬇️ Nouveaux champs (remplacent `adresse`)
+  adresseDepart?: string | null;
+  adresseArrivee?: string | null;
+
+  status?: ParcelStatus;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 // Définition du type du contexte
 interface ParcelContextType {
   pendingParcels: Parcel[];
   addParcel: (parcel: Parcel) => void;
+  // (optionnel) utilitaires pratiques si besoin plus tard
+  setPendingParcels?: React.Dispatch<React.SetStateAction<Parcel[]>>;
+  clearPending?: () => void;
 }
 
 // Création du contexte
@@ -32,8 +46,12 @@ export const ParcelProvider = ({ children }: { children: ReactNode }) => {
     setPendingParcels((prev) => [...prev, parcel]);
   };
 
+  const clearPending = () => setPendingParcels([]);
+
   return (
-    <ParcelContext.Provider value={{ pendingParcels, addParcel }}>
+    <ParcelContext.Provider
+      value={{ pendingParcels, addParcel, setPendingParcels, clearPending }}
+    >
       {children}
     </ParcelContext.Provider>
   );

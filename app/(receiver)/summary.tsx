@@ -12,7 +12,8 @@ type Parcel = {
   poids?: number | string | null;
   dimensions?: string | null;
   description?: string | null;
-  adresse?: string | null;
+  adresseDepart?: string | null;   // ✅ nouveau
+  adresseArrivee?: string | null;  // ✅ nouveau
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -36,7 +37,7 @@ export default function ParcelSummary() {
         setLoadingById(true);
         const res = await client.models.Parcel.get(
           { id } as any,
-          { authMode: "userPool" } // ✅ important
+          { authMode: "userPool" }
         );
         const row = (res as any)?.data as Parcel | null;
         setFromDb(row ?? null);
@@ -59,7 +60,8 @@ export default function ParcelSummary() {
       poids: Number.isFinite(poidsNum as number) ? (poidsNum as number) : undefined,
       dimensions: params.dimensions ? String(params.dimensions) : undefined,
       description: params.description ? String(params.description) : undefined,
-      adresse: params.adresse ? String(params.adresse) : undefined,
+      adresseDepart: params.adresseDepart ? String(params.adresseDepart) : undefined, // ✅
+      adresseArrivee: params.adresseArrivee ? String(params.adresseArrivee) : undefined, // ✅
     };
   }, [params]);
 
@@ -69,11 +71,19 @@ export default function ParcelSummary() {
   const handleConfirm = async () => {
     // Si on est en MODE B (depuis DB), pas besoin de créer
     if (fromDb?.id) {
-      Alert.alert("Info", "Ce colis existe déjà.");
+      Alert.alert("Info", "Ce colis est déjà enregistré.");
       return;
     }
     if (!data.type) {
       Alert.alert("Champ manquant", "Le type de colis est requis (sélectionne un preset).");
+      return;
+    }
+    if (!data.adresseDepart?.trim()) {
+      Alert.alert("Champ manquant", "L'adresse de départ est requise.");
+      return;
+    }
+    if (!data.adresseArrivee?.trim()) {
+      Alert.alert("Champ manquant", "L'adresse d'arrivée est requise.");
       return;
     }
 
@@ -85,14 +95,15 @@ export default function ParcelSummary() {
         {
           type: data.type,
           status: "AVAILABLE",
-          poids: data.poids as number | undefined,
+          poids: (data.poids as number | undefined) ?? undefined,
           dimensions: data.dimensions || undefined,
           description: data.description || undefined,
-          adresse: data.adresse || undefined,
+          adresseDepart: data.adresseDepart?.trim(),  // ✅
+          adresseArrivee: data.adresseArrivee?.trim(), // ✅
           createdAt: now,
           updatedAt: now,
         } as any,
-        { authMode: "userPool" } // ✅ important
+        { authMode: "userPool" }
       );
 
       router.replace("/pending");
@@ -125,7 +136,9 @@ export default function ParcelSummary() {
       <Row label="Poids" value={fmtKg(data.poids)} />
       <Row label="Dimensions" value={fmt(data.dimensions)} />
       <Row label="Description" value={fmt(data.description)} />
-      <Row label="Adresse d’enlèvement" value={fmt(data.adresse)} />
+      {/* ✅ 2 lignes adresses */}
+      <Row label="Adresse de départ" value={fmt(data.adresseDepart)} />
+      <Row label="Adresse d’arrivée" value={fmt(data.adresseArrivee)} />
 
       <TouchableOpacity
         style={[styles.button, (submitting || !!fromDb?.id) && { opacity: 0.7 }]}

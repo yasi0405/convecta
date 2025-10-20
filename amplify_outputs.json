@@ -73,11 +73,18 @@
               "isRequired": false,
               "attributes": []
             },
-            "adresse": {
-              "name": "adresse",
+            "adresseDepart": {
+              "name": "adresseDepart",
               "isArray": false,
               "type": "String",
-              "isRequired": false,
+              "isRequired": true,
+              "attributes": []
+            },
+            "adresseArrivee": {
+              "name": "adresseArrivee",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
               "attributes": []
             },
             "status": {

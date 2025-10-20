@@ -9,14 +9,15 @@ const schema = a.schema({
       poids: a.float(),
       dimensions: a.string(),
       description: a.string(),
-      adresse: a.string(),
+      adresseDepart: a.string().required(),  // ✅ nouveau champ obligatoire
+      adresseArrivee: a.string().required(), // ✅ nouveau champ obligatoire
       status: a.ref("ParcelStatus").required(),
       createdAt: a.datetime(),
       updatedAt: a.datetime(),
     })
     .authorization((allow: any) => [
-      allow.guest().to(["read"]),                         // invités : lecture
-      allow.authenticated().to(["create", "read", "update"]), // utilisateurs connectés (via Identity Pool "authenticated")
+      allow.guest().to(["read"]),                          // invités : lecture
+      allow.authenticated().to(["create", "read", "update"]) // utilisateurs connectés
     ]),
 });
 
@@ -25,7 +26,6 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    // ✅ Version compatible : un seul mode, Identity Pool
     defaultAuthorizationMode: 'identityPool',
   },
 });

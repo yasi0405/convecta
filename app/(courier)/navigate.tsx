@@ -1,7 +1,7 @@
 // app/(courier)/navigate.tsx
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Image,
@@ -17,6 +17,7 @@ import {
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 
 type Coords = { lat: number; lng: number };
+type Step = { instruction: string; distance: number; duration: number };
 
 export default function CourierNavigate() {
   const router = useRouter();
@@ -28,25 +29,37 @@ export default function CourierNavigate() {
   const [origin, setOrigin] = useState<Coords | null>(null);
   const [target, setTarget] = useState<Coords | null>(null);
 
-  // 1) Récupérer la position actuelle (facultatif pour l'image, utile pour navigation externe)
+  // ETA live
+  const [etaSec, setEtaSec] = useState<number | null>(null);
+  const [remainMeters, setRemainMeters] = useState<number | null>(null);
+  const [nextStep, setNextStep] = useState<Step | null>(null);
+  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]); // [lng,lat]
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 1) Position actuelle (nécessaire pour le live)
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === "granted") {
-          const loc = await Location.getCurrentPositionAsync({});
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           if (!mounted) return;
           setOrigin({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        } else {
+          setError("Permission de localisation refusée.");
         }
-      } catch {
-        // ignore, on utilisera Bruxelles par défaut
+      } catch (e) {
+        setError("Impossible d'obtenir la position actuelle.");
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // 2) Géocoder l'adresse destination avec Mapbox Geocoding
+  // 2) Géocoder la destination
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -61,10 +74,9 @@ export default function CourierNavigate() {
         return;
       }
       try {
-        setLoading(true);
         const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
           dest
-        )}.json?limit=1&access_token=${MAPBOX_TOKEN}`;
+        )}.json?limit=1&language=fr&access_token=${MAPBOX_TOKEN}`;
         const res = await fetch(url);
         const json = await res.json();
         const feat = json?.features?.[0];
@@ -78,37 +90,107 @@ export default function CourierNavigate() {
         setLoading(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [dest]);
 
-  // 3) Construire l'URL de la carte statique (markers + auto fit si 2 points)
+  // 3) Poll Directions (driving-traffic) toutes les 15s
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || !target) return;
+
+    const getLiveRoute = async () => {
+      try {
+        // Récupère la position fraîche (évite les dérives)
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const o = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        setOrigin(o);
+
+        const url =
+          `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/` +
+          `${o.lng},${o.lat};${target.lng},${target.lat}` +
+          `?alternatives=false&geometries=geojson&overview=full&steps=true&language=fr&access_token=${MAPBOX_TOKEN}`;
+        const res = await fetch(url);
+        const json = await res.json();
+
+        const route = json?.routes?.[0];
+        if (!route) throw new Error("Aucun itinéraire trouvé.");
+
+        // ETA + distance restantes
+        const duration = route.duration as number; // sec
+        const distance = route.distance as number; // m
+        setEtaSec(Math.max(0, Math.round(duration)));
+        setRemainMeters(Math.max(0, Math.round(distance)));
+
+        // Geometry (GeoJSON LineString coords: [lng,lat][])
+        const coords: [number, number][] = route.geometry?.coordinates ?? [];
+        setRouteCoords(coords);
+
+        // Prochaine manœuvre (premier step de la première leg encore à faire)
+        const firstLeg = route.legs?.[0];
+        const step = firstLeg?.steps?.[0];
+        if (step) {
+          setNextStep({
+            instruction: step.maneuver?.instruction ?? "Continuer",
+            distance: step.distance ?? 0,
+            duration: step.duration ?? 0,
+          });
+        } else {
+          setNextStep(null);
+        }
+      } catch (e: any) {
+        setError(e?.message ?? "Échec du calcul d'itinéraire.");
+      }
+    };
+
+    // premier calcul immédiat
+    getLiveRoute();
+
+    // puis polling
+    pollRef.current && clearInterval(pollRef.current);
+    pollRef.current = setInterval(getLiveRoute, 15000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [target]);
+
+  // 4) Construire l’URL de la carte statique avec overlay du tracé
   const staticMapUrl = useMemo(() => {
     if (!MAPBOX_TOKEN) return null;
 
-    // Default: Bruxelles
+    // Fallback Bruxelles
     const fallback = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/4.3517,50.8503,12,0/800x600?access_token=${MAPBOX_TOKEN}`;
 
-    // Si on a la destination uniquement
+    // Markers
+    const mkA = origin ? `pin-l-a+000000(${origin.lng},${origin.lat})` : null; // noir
+    const mkB = target ? `pin-l-b+ff0000(${target.lng},${target.lat})` : null; // rouge
+
+    // Route path overlay (downsample pour limiter la taille de l’URL)
+    const sampled = downsample(routeCoords, 80); // max ~80 points
+    const pathOverlay =
+      sampled.length >= 2
+        ? `path-5+1e88e5-0.8(${sampled.map(([lng, lat]) => `${lng},${lat}`).join(";")})`
+        : null;
+
+    // Cas destination seule
     if (target && !origin) {
-      const markerDest = `pin-l-b+ff0000(${target.lng},${target.lat})`;
-      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${markerDest}/${target.lng},${target.lat},14,0/800x600?access_token=${MAPBOX_TOKEN}`;
+      const overlays = [mkB, pathOverlay].filter(Boolean).join(",");
+      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/${target.lng},${target.lat},14,0/800x600?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
     }
 
-    // Si on a origine + destination → on laisse Mapbox cadrer automatiquement
+    // Cas origine + destination
     if (origin && target) {
-      const markerA = `pin-l-a+000000(${origin.lng},${origin.lat})`;   // noir
-      const markerB = `pin-l-b+ff0000(${target.lng},${target.lat})`;   // rouge
-      // "auto" = cadrage automatique sur les overlays
-      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${markerA},${markerB}/auto/800x600?access_token=${MAPBOX_TOKEN}`;
+      const overlays = [mkA, mkB, pathOverlay].filter(Boolean).join(",");
+      // "auto" pour cadrer sur les overlays
+      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/auto/800x600?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
     }
 
-    // Sinon fallback
     return fallback;
-  }, [origin, target]);
+  }, [origin, target, routeCoords]);
 
   const openExternalNavigation = async () => {
     const q = dest ? encodeURIComponent(dest) : "";
-    // On tente d'abord Apple/Google Maps en fonction de la plateforme
     const url =
       Platform.OS === "ios"
         ? `http://maps.apple.com/?daddr=${q}`
@@ -117,10 +199,12 @@ export default function CourierNavigate() {
     if (can) {
       await Linking.openURL(url);
     } else {
-      // Fallback très générique
       await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${q}`);
     }
   };
+
+  const etaText = etaSec != null ? formatETA(etaSec) : "—";
+  const distText = remainMeters != null ? formatKm(remainMeters) : "—";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#111" }}>
@@ -134,12 +218,18 @@ export default function CourierNavigate() {
         </Text>
       </View>
 
-      {/* Carte */}
+      {/* Map + ETA bar */}
+      <View style={styles.infoBar}>
+        <Text style={styles.infoText}>⏱️ {etaText}</Text>
+        <Text style={styles.dot}>•</Text>
+        <Text style={styles.infoText}>📍 {distText} restantes</Text>
+      </View>
+
       <View style={styles.mapWrap}>
         {(!staticMapUrl || loading) && (
           <View style={styles.center}>
             <ActivityIndicator />
-            <Text style={styles.centerText}>Préparation de la carte…</Text>
+            <Text style={styles.centerText}>Calcul de l’itinéraire…</Text>
           </View>
         )}
         {!!staticMapUrl && !loading && (
@@ -148,7 +238,7 @@ export default function CourierNavigate() {
             style={StyleSheet.absoluteFillObject}
             resizeMode="cover"
             accessible
-            accessibilityLabel="Carte statique"
+            accessibilityLabel="Carte avec itinéraire"
           />
         )}
       </View>
@@ -160,10 +250,18 @@ export default function CourierNavigate() {
             {error}
           </Text>
         ) : (
-          <Text style={styles.destText} numberOfLines={2}>
-            {dest || "Destination inconnue"}
-          </Text>
+          <>
+            <Text style={styles.destText} numberOfLines={2}>
+              {dest || "Destination inconnue"}
+            </Text>
+            {nextStep && (
+              <Text style={[styles.destText, { opacity: 0.9 }]} numberOfLines={2}>
+                ◾ Prochaine manœuvre : {nextStep.instruction} ({formatKm(nextStep.distance)} · {formatETA(nextStep.duration)})
+              </Text>
+            )}
+          </>
         )}
+
         <TouchableOpacity
           style={[styles.navBtn, !dest && { opacity: 0.6 }]}
           onPress={openExternalNavigation}
@@ -174,6 +272,32 @@ export default function CourierNavigate() {
       </View>
     </SafeAreaView>
   );
+}
+
+/** Downsample une liste de coords [lng,lat] pour l'overlay Static. */
+function downsample(coords: [number, number][], maxPts: number): [number, number][] {
+  if (!coords || coords.length <= maxPts) return coords ?? [];
+  const step = Math.max(1, Math.floor(coords.length / maxPts));
+  const out: [number, number][] = [];
+  for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
+  // s'assurer d'inclure le dernier point
+  const last = coords[coords.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+function formatETA(sec: number): string {
+  const m = Math.round(sec / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return `${h} h ${rm} min`;
+}
+
+function formatKm(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  const km = meters / 1000;
+  return `${km.toFixed(km >= 10 ? 0 : 1)} km`;
 }
 
 const styles = StyleSheet.create({
@@ -194,6 +318,20 @@ const styles = StyleSheet.create({
   headerBtnText: { color: "#fff" },
   headerTitle: { color: "#fff", fontWeight: "700", fontSize: 16, flex: 1 },
 
+  infoBar: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#0f172a",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: "#222",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  infoText: { color: "#fff", fontWeight: "600" },
+  dot: { color: "#6b7280" },
+
   mapWrap: {
     flex: 1,
     backgroundColor: "#000",
@@ -209,12 +347,13 @@ const styles = StyleSheet.create({
     borderTopColor: "#222",
     gap: 8,
   },
-  destText: { color: "#fff", opacity: 0.9 },
+  destText: { color: "#fff", opacity: 0.95 },
   navBtn: {
     backgroundColor: "#1e88e5",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
+    marginTop: 6,
   },
   navBtnText: { color: "#fff", fontWeight: "700" },
 

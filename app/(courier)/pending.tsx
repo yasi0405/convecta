@@ -3,35 +3,51 @@ import { Parcel, useParcelContext } from "@/src/context/ParcelContext";
 import React from "react";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-
 export default function ParcelList() {
   const { pendingParcels } = useParcelContext();
-    console.log("Colis en attente :", pendingParcels);
+  console.log("Colis en attente :", pendingParcels);
+
+  const fmt = (v?: string | number | null) =>
+    v == null || v === "" ? "—" : String(v);
+
+  const fmtKg = (v?: number | string | null) => {
+    if (v == null || v === "") return "—";
+    const n = typeof v === "string" ? Number((v as string).replace(",", ".")) : v;
+    return Number.isFinite(n as number) ? `${n} kg` : String(v);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Colis en attente</Text>
+
       {pendingParcels.length === 0 ? (
         <Text style={styles.cardText}>Aucun colis pour le moment.</Text>
       ) : (
         <>
-        <FlatList<Parcel>
-          data={pendingParcels}
-          keyExtractor={(_, index) => index.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.cardText}>📦 {item.type}</Text>
-              <Text style={styles.cardText}>Poids : {item.poids} kg</Text>
-              <Text style={styles.cardText}>Dimensions : {item.dimensions}</Text>
-              <Text style={styles.cardText}>Description : {item.description}</Text>
-              <Text style={styles.cardText}>Adresse : {item.adresse}</Text>
-            </View>
+          <FlatList<Parcel>
+            data={pendingParcels}
+            keyExtractor={(item, index) => (item.id ? String(item.id) : String(index))}
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={[styles.cardText, styles.cardTitle]}>📦 {fmt(item.type)}</Text>
 
-          )}
-        />
-        <TouchableOpacity style={styles.button} onPress={() => console.log("refresh")}>
-          <Text style={styles.buttonText}>Rafraîchir la liste</Text>
-        </TouchableOpacity>
+                {/* Meta */}
+                <Text style={styles.cardText}>Poids : {fmtKg(item.poids)}</Text>
+                <Text style={styles.cardText}>Dimensions : {fmt(item.dimensions)}</Text>
+                {item.description ? (
+                  <Text style={styles.cardText}>Description : {item.description}</Text>
+                ) : null}
+
+                {/* ✅ Nouvelles adresses */}
+                <Text style={styles.cardText}>Départ : {fmt(item.adresseDepart)}</Text>
+                <Text style={styles.cardText}>Arrivée : {fmt(item.adresseArrivee)}</Text>
+              </View>
+            )}
+          />
+
+          <TouchableOpacity style={styles.button} onPress={() => console.log("refresh")}>
+            <Text style={styles.buttonText}>Rafraîchir la liste</Text>
+          </TouchableOpacity>
         </>
       )}
     </View>
@@ -49,8 +65,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: Colors.card,
   },
+  cardTitle: { fontWeight: "600", marginBottom: 6 },
   cardText: {
     color: Colors.textOnCard,
+    marginBottom: 4,
   },
   button: {
     backgroundColor: Colors.button,
