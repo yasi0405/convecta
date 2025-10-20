@@ -72,25 +72,12 @@ export default function Dashboard() {
           </View>
           <TouchableOpacity
             style={styles.confirmButton}
-            onPress={() => router.replace(`/${mode}` as any)}
+            onPress={() => router.replace(mode === 'courier' ? '/(courier)/home' : '/(receiver)/home')}
           >
             <Text style={styles.confirmButtonText}>Confirmer</Text>
           </TouchableOpacity>
         </View>
       </View>
-      {/* <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/new")}
-      >
-        <Text style={styles.buttonText}>Nouveau colis</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/pending")}
-      >
-        <Text style={styles.buttonText}>Colis en attente</Text>
-      </TouchableOpacity> */}
     </View>
   );
 }

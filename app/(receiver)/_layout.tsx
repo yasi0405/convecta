@@ -1,34 +1,21 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs } from "expo-router";
+import React from "react";
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import Colors from '@/constants/Colors';
-
-export default function TabLayout() {
-
+export default function ReceiverLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarActiveTintColor: Colors.background,
-        tabBarInactiveTintColor: Colors.background,
-        tabBarStyle: {
-          backgroundColor: Colors.accent,
-          borderTopWidth: 0,
-          elevation: 0,
-          position: 'absolute',
-        },
-      }}>
+        tabBarStyle: { display: "none" }, // pas de tabs visibles
+      }}
+    >
       <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
+        name="home"
+        options={{ title: "Home" }}
+      />
+      <Tabs.Screen
+        name="summary"
+        options={{ href: null, headerShown: true, title: "Résumé du colis" }}
       />
     </Tabs>
   );
