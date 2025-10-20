@@ -49,7 +49,7 @@
               "name": "type",
               "isArray": false,
               "type": "String",
-              "isRequired": false,
+              "isRequired": true,
               "attributes": []
             },
             "poids": {
@@ -86,7 +86,7 @@
               "type": {
                 "enum": "ParcelStatus"
               },
-              "isRequired": false,
+              "isRequired": true,
               "attributes": []
             },
             "createdAt": {
@@ -101,8 +101,7 @@
               "isArray": false,
               "type": "AWSDateTime",
               "isRequired": false,
-              "attributes": [],
-              "isReadOnly": true
+              "attributes": []
             }
           },
           "syncable": true,
@@ -127,74 +126,8 @@
                     "allow": "private",
                     "operations": [
                       "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
-                  }
-                ]
-              }
-            }
-          ],
-          "primaryKeyInfo": {
-            "isCustomPrimaryKey": false,
-            "primaryKeyFieldName": "id",
-            "sortKeyFieldNames": []
-          }
-        },
-        "Todo": {
-          "name": "Todo",
-          "fields": {
-            "id": {
-              "name": "id",
-              "isArray": false,
-              "type": "ID",
-              "isRequired": true,
-              "attributes": []
-            },
-            "content": {
-              "name": "content",
-              "isArray": false,
-              "type": "String",
-              "isRequired": false,
-              "attributes": []
-            },
-            "createdAt": {
-              "name": "createdAt",
-              "isArray": false,
-              "type": "AWSDateTime",
-              "isRequired": false,
-              "attributes": [],
-              "isReadOnly": true
-            },
-            "updatedAt": {
-              "name": "updatedAt",
-              "isArray": false,
-              "type": "AWSDateTime",
-              "isRequired": false,
-              "attributes": [],
-              "isReadOnly": true
-            }
-          },
-          "syncable": true,
-          "pluralName": "Todos",
-          "attributes": [
-            {
-              "type": "model",
-              "properties": {}
-            },
-            {
-              "type": "auth",
-              "properties": {
-                "rules": [
-                  {
-                    "allow": "public",
-                    "provider": "iam",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
+                      "read",
+                      "update"
                     ]
                   }
                 ]
