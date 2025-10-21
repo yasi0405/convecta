@@ -58,7 +58,7 @@ export default function ParcelList() {
       // Compatibilité selon les versions : res.data ? res.data : res.items
       const items: ParcelWithAssign[] =
         (res?.data as ParcelWithAssign[]) ??
-        (res?.items as ParcelWithAssign[]) ??
+        ((res as any)?.items as ParcelWithAssign[]) ??
         [];
 
       setTakenParcels(items);
@@ -77,10 +77,11 @@ export default function ParcelList() {
     const who =
       item.courierName?.trim() ||
       (item.assignedTo ? `Livreur #${item.assignedTo.slice(0, 6)}…` : "—");
+    const _status = String(item.status);
     const statutLisible =
-      item.status === "ASSIGNED" ? "Assigné"
-      : item.status === "IN_PROGRESS" ? "En cours"
-      : item.status === "DELIVERING" ? "En livraison"
+      _status === "ASSIGNED" ? "Assigné"
+      : _status === "IN_PROGRESS" ? "En cours"
+      : _status === "DELIVERING" ? "En livraison"
       : item.status ?? "—";
 
     return (
