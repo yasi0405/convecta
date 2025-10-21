@@ -96,6 +96,27 @@
               "isRequired": true,
               "attributes": []
             },
+            "assignedTo": {
+              "name": "assignedTo",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "courierName": {
+              "name": "courierName",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "owner": {
+              "name": "owner",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
             "createdAt": {
               "name": "createdAt",
               "isArray": false,
@@ -154,7 +175,10 @@
           "values": [
             "AVAILABLE",
             "ASSIGNED",
-            "DELIVERED"
+            "IN_PROGRESS",
+            "DELIVERING",
+            "DELIVERED",
+            "CANCELLED"
           ]
         }
       },

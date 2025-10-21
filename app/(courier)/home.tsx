@@ -1,4 +1,5 @@
 import Colors from "@/constants/Colors";
+import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -12,33 +13,48 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import type { Schema } from "../../amplify/data/resource";
 
 // ⚙️ Token Mapbox depuis l'env
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 
-// ⚙️ Paramètres commission (ajuste à ta convenance)
-const COMMISSION_BASE_EUR = 1;      // 1€ dès le départ
-const COMMISSION_EUR_PER_KM = 0.5;  // prix par km (0.4€ par défaut ~ 10€/h si ~25 km/h)
+// ⚙️ Paramètres commission
+const COMMISSION_BASE_EUR = 1;     // 1€ dès le départ
+const COMMISSION_EUR_PER_KM = 0.5; // €/km
 
 export default function CourierHome() {
   const client = generateClient<Schema>();
   const router = useRouter();
 
+  // 🔢 Statuts étendus (alignés avec le schéma backend)
+  type ParcelStatus =
+    | "AVAILABLE"
+    | "ASSIGNED"
+    | "IN_PROGRESS"
+    | "DELIVERING"
+    | "DELIVERED"
+    | "CANCELLED";
+
   type Parcel = {
     id: string;
     type: string;
-    status: "AVAILABLE" | "ASSIGNED" | "DELIVERED";
+    status: ParcelStatus;
     poids?: number | string | null;
     dimensions?: string | null;
     description?: string | null;
+
     // ✅ nouveau schéma
     adresseDepart?: string | null;
     adresseArrivee?: string | null;
-    // (legacy) certains anciens enregistrements peuvent garder "adresse"
+
+    // (legacy)
     adresse?: string | null;
+
+    assignedTo?: string | null;
+    owner?: string | null;
+
     createdAt?: string | null; // ISO 8601
     updatedAt?: string | null;
   };
@@ -60,6 +76,25 @@ export default function CourierHome() {
   const [etaByParcel, setEtaByParcel] = useState<Record<string, number | null>>({});
   // 📏 Distance totale (A→B + B→C) par colis.id en mètres
   const [distByParcel, setDistByParcel] = useState<Record<string, number | null>>({});
+
+  // 👤 ID utilisateur connecté (robuste aux versions Amplify)
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        const uid =
+          (user as any)?.userId ??
+          (user as any)?.username ??
+          (user as any)?.signInDetails?.loginId ??
+          (user as any)?.attributes?.sub ??
+          null;
+        setUserId(uid);
+      } catch (err) {
+        console.log("Erreur getCurrentUser →", err);
+      }
+    })();
+  }, []);
 
   // --- Helpers Mapbox (geocode & directions) ---
   const mbForwardGeocode = async (addr: string): Promise<Coords | null> => {
@@ -107,21 +142,27 @@ export default function CourierHome() {
     return { durationSec, distanceM };
   };
 
-  // 🔁 charge la liste des colis
+  // 🔁 charge la liste des colis disponibles
   const listAvailable = async () => {
-    // 1) tente en userPool (JWT)
     try {
       const res = await client.models.Parcel.list({
         filter: { status: { eq: "AVAILABLE" } },
-        authMode: "userPool",
+        limit: 100,
+        authMode: "userPool", // ✅ dans le même objet
       });
-      return (Array.isArray(res.data) ? (res.data as any) : []) as Parcel[];
+
+      // Compat Gen2/Gen1
+      const items: Parcel[] =
+        (Array.isArray((res as any)?.data) && (res as any).data.length > 0
+          ? (res as any).data
+          : Array.isArray((res as any)?.items)
+          ? (res as any).items
+          : []) as Parcel[];
+
+      return items;
     } catch (e: any) {
-      // 2) fallback (si tu rouvres l'accès invité plus tard)
-      const msg = e?.message ?? "";
-      if (!/Unauthorized/i.test(msg)) throw e;
-      const res = await client.models.Parcel.list({ filter: { status: { eq: "AVAILABLE" } } });
-      return (Array.isArray(res.data) ? (res.data as any) : []) as Parcel[];
+      console.log("listAvailable error →", e?.message || e);
+      return [];
     }
   };
 
@@ -140,6 +181,7 @@ export default function CourierHome() {
     }
   };
 
+  // Chargement initial
   useEffect(() => {
     loadParcels();
   }, []);
@@ -172,6 +214,7 @@ export default function CourierHome() {
     };
   }, []);
 
+  // Tri anti-ancien (plus récent en haut)
   const sortedParcels = useMemo(() => {
     return [...parcels].sort((a, b) => {
       const da = a.createdAt ? Date.parse(a.createdAt) : 0;
@@ -233,38 +276,46 @@ export default function CourierHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myPos, parcels]);
 
-  const onSelect = (p: Parcel) => {
-    setSelected(p);
-  };
+  const onSelect = (p: Parcel) => setSelected(p);
 
+  // ✅ Acceptation: on passe directement en IN_PROGRESS et on assigne le livreur
+  // ✅ Acceptation: passe en IN_PROGRESS + assigne le livreur
   const onAccept = async () => {
     if (!selected) return;
+    if (!userId) {
+      setError("Utilisateur non authentifié. Réessaie après connexion.");
+      return;
+    }
+
     try {
       setAccepting(true);
       const now = new Date().toISOString();
 
-      // Mutation: passer le colis en ASSIGNED
+      // Statut approprié à l'acceptation :
+      // - AVAILABLE/ASSIGNED -> IN_PROGRESS (pour que le client voie "en cours")
+      const nextStatus: ParcelStatus =
+        selected.status === "AVAILABLE" || selected.status === "ASSIGNED"
+          ? "IN_PROGRESS"
+          : (selected.status ?? "IN_PROGRESS");
+
       await client.models.Parcel.update(
         {
           id: selected.id,
-          status: "ASSIGNED",
+          status: nextStatus,
+          assignedTo: userId,
           updatedAt: now,
-        } as any,
+        },
         { authMode: "userPool" }
       );
 
-      // Retirer localement
+      // Retirer de la liste des "AVAILABLE"
       setParcels((prev) => prev.filter((x) => x.id !== selected.id));
 
-      // 👇 Redirection vers la page de navigation (destination = adresse d'enlèvement)
+      // Redirige vers la navigation (adresse d'enlèvement)
       const pickup = selected.adresseDepart ?? selected.adresse ?? "";
       router.push({
         pathname: "/(courier)/navigate",
-        params: {
-          id: selected.id,
-          dest: pickup,
-          label: selected.type ?? "Mission",
-        },
+        params: { id: selected.id, dest: pickup, label: selected.type ?? "Mission" },
       });
 
       setSelected(null);
@@ -345,24 +396,14 @@ export default function CourierHome() {
                 <View style={styles.bottomRow}>
                   <View style={styles.bottomCol}>
                     <Text style={styles.bottomLabel}>Temps pour la course</Text>
-                    <Text style={styles.bottomBig}>
-                      {etaSec === undefined ? "…" : fmtETA(etaSec)}
-                    </Text>
-                    {etaSec === null && (
-                      <Text style={styles.bottomHint}>
-                        Indisponible (adress./GPS/Mapbox)
-                      </Text>
-                    )}
+                    <Text style={styles.bottomBig}>{etaSec === undefined ? "…" : fmtETA(etaSec)}</Text>
+                    {etaSec === null && <Text style={styles.bottomHint}>Indisponible (adress./GPS/Mapbox)</Text>}
                   </View>
 
                   <View style={[styles.bottomCol, styles.bottomColRight]}>
                     <Text style={styles.bottomLabel}>Commission estimée</Text>
-                    <Text style={styles.bottomBig}>
-                      {commission == null ? "—" : fmtEUR(commission)}
-                    </Text>
-                    <Text style={styles.bottomHint}>
-                      1€ + {COMMISSION_EUR_PER_KM}€/km
-                    </Text>
+                    <Text style={styles.bottomBig}>{commission == null ? "—" : fmtEUR(commission)}</Text>
+                    <Text style={styles.bottomHint}>1€ + {COMMISSION_EUR_PER_KM}€/km</Text>
                   </View>
                 </View>
               </Pressable>
@@ -426,18 +467,12 @@ export default function CourierHome() {
                 </Text>
                 {/* ✅ détails adresses */}
                 {selected.adresseDepart ? (
-                  <Text style={[styles.modalText, { opacity: 0.9 }]}>
-                    Enlèvement: {selected.adresseDepart}
-                  </Text>
+                  <Text style={[styles.modalText, { opacity: 0.9 }]}>Enlèvement: {selected.adresseDepart}</Text>
                 ) : selected.adresse ? (
-                  <Text style={[styles.modalText, { opacity: 0.9 }]}>
-                    Enlèvement: {selected.adresse /* legacy */}
-                  </Text>
+                  <Text style={[styles.modalText, { opacity: 0.9 }]}>Enlèvement: {selected.adresse /* legacy */}</Text>
                 ) : null}
                 {selected.adresseArrivee ? (
-                  <Text style={[styles.modalText, { opacity: 0.9 }]}>
-                    Livraison: {selected.adresseArrivee}
-                  </Text>
+                  <Text style={[styles.modalText, { opacity: 0.9 }]}>Livraison: {selected.adresseArrivee}</Text>
                 ) : null}
               </View>
             ) : null}

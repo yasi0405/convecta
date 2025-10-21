@@ -3,18 +3,28 @@ import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Linking,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Linking,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
+// ✅ Mapbox natif (interactive sur iOS en Dev Client / build)
+import MapboxGL from "@rnmapbox/maps";
+
+// Tokens
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
+// Active Mapbox natif si dispo (iOS + lib liée). En Expo Go, ça sera falsy.
+const HAS_MAPBOX = Platform.OS === "ios" && !!(MapboxGL as any)?.MapView;
+
+if (HAS_MAPBOX && MAPBOX_TOKEN) {
+  MapboxGL.setAccessToken(MAPBOX_TOKEN);
+}
 
 type Coords = { lat: number; lng: number };
 type Step = { instruction: string; distance: number; duration: number };
@@ -37,7 +47,7 @@ export default function CourierNavigate() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 1) Position actuelle (nécessaire pour le live)
+  // 1) Position actuelle
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -50,7 +60,7 @@ export default function CourierNavigate() {
         } else {
           setError("Permission de localisation refusée.");
         }
-      } catch (e) {
+      } catch {
         setError("Impossible d'obtenir la position actuelle.");
       }
     })();
@@ -95,13 +105,12 @@ export default function CourierNavigate() {
     };
   }, [dest]);
 
-  // 3) Poll Directions (driving-traffic) toutes les 15s
+  // 3) Poll Directions toutes les 15s
   useEffect(() => {
     if (!MAPBOX_TOKEN || !target) return;
 
     const getLiveRoute = async () => {
       try {
-        // Récupère la position fraîche (évite les dérives)
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const o = { lat: loc.coords.latitude, lng: loc.coords.longitude };
         setOrigin(o);
@@ -117,75 +126,65 @@ export default function CourierNavigate() {
         if (!route) throw new Error("Aucun itinéraire trouvé.");
 
         // ETA + distance restantes
-        const duration = route.duration as number; // sec
-        const distance = route.distance as number; // m
-        setEtaSec(Math.max(0, Math.round(duration)));
-        setRemainMeters(Math.max(0, Math.round(distance)));
+        setEtaSec(Math.max(0, Math.round(route.duration as number))); // sec
+        setRemainMeters(Math.max(0, Math.round(route.distance as number))); // m
 
-        // Geometry (GeoJSON LineString coords: [lng,lat][])
+        // Geometry
         const coords: [number, number][] = route.geometry?.coordinates ?? [];
         setRouteCoords(coords);
 
-        // Prochaine manœuvre (premier step de la première leg encore à faire)
+        // Prochaine manœuvre
         const firstLeg = route.legs?.[0];
         const step = firstLeg?.steps?.[0];
-        if (step) {
-          setNextStep({
-            instruction: step.maneuver?.instruction ?? "Continuer",
-            distance: step.distance ?? 0,
-            duration: step.duration ?? 0,
-          });
-        } else {
-          setNextStep(null);
-        }
+        setNextStep(
+          step
+            ? {
+                instruction: step.maneuver?.instruction ?? "Continuer",
+                distance: step.distance ?? 0,
+                duration: step.duration ?? 0,
+              }
+            : null
+        );
       } catch (e: any) {
         setError(e?.message ?? "Échec du calcul d'itinéraire.");
       }
     };
 
-    // premier calcul immédiat
     getLiveRoute();
-
-    // puis polling
-    pollRef.current && clearInterval(pollRef.current);
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     pollRef.current = setInterval(getLiveRoute, 15000);
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
   }, [target]);
 
-  // 4) Construire l’URL de la carte statique avec overlay du tracé
+  // 4) Static map (fallback pour Expo Go)
   const staticMapUrl = useMemo(() => {
     if (!MAPBOX_TOKEN) return null;
-
-    // Fallback Bruxelles
     const fallback = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/4.3517,50.8503,12,0/800x600?access_token=${MAPBOX_TOKEN}`;
-
-    // Markers
-    const mkA = origin ? `pin-l-a+000000(${origin.lng},${origin.lat})` : null; // noir
-    const mkB = target ? `pin-l-b+ff0000(${target.lng},${target.lat})` : null; // rouge
-
-    // Route path overlay (downsample pour limiter la taille de l’URL)
-    const sampled = downsample(routeCoords, 80); // max ~80 points
-    const pathOverlay =
+    const mkA = origin ? `pin-l-a+000000(${origin.lng},${origin.lat})` : null;
+    const mkB = target ? `pin-l-b+ff0000(${target.lng},${target.lat})` : null;
+    const sampled = downsample(routeCoords, 80);
+    const path =
       sampled.length >= 2
         ? `path-5+1e88e5-0.8(${sampled.map(([lng, lat]) => `${lng},${lat}`).join(";")})`
         : null;
 
-    // Cas destination seule
-    if (target && !origin) {
-      const overlays = [mkB, pathOverlay].filter(Boolean).join(",");
-      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/${target.lng},${target.lat},14,0/800x600?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
-    }
-
-    // Cas origine + destination
     if (origin && target) {
-      const overlays = [mkA, mkB, pathOverlay].filter(Boolean).join(",");
-      // "auto" pour cadrer sur les overlays
+      const overlays = [mkA, mkB, path].filter(Boolean).join(",");
       return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/auto/800x600?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
     }
-
+    if (target && !origin) {
+      const overlays = [mkB, path].filter(Boolean).join(",");
+      return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/${target.lng},${target.lat},14,0/800x600?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
+    }
     return fallback;
   }, [origin, target, routeCoords]);
 
@@ -196,11 +195,7 @@ export default function CourierNavigate() {
         ? `http://maps.apple.com/?daddr=${q}`
         : `https://www.google.com/maps/dir/?api=1&destination=${q}`;
     const can = await Linking.canOpenURL(url);
-    if (can) {
-      await Linking.openURL(url);
-    } else {
-      await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${q}`);
-    }
+    await Linking.openURL(can ? url : `https://www.google.com/maps/dir/?api=1&destination=${q}`);
   };
 
   const etaText = etaSec != null ? formatETA(etaSec) : "—";
@@ -218,28 +213,72 @@ export default function CourierNavigate() {
         </Text>
       </View>
 
-      {/* Map + ETA bar */}
+      {/* Infos ETA */}
       <View style={styles.infoBar}>
         <Text style={styles.infoText}>⏱️ {etaText}</Text>
         <Text style={styles.dot}>•</Text>
         <Text style={styles.infoText}>📍 {distText} restantes</Text>
       </View>
 
+      {/* 🗺️ Carte : MapboxGL interactif (iOS build/Dev Client) OU image statique (Expo Go) */}
       <View style={styles.mapWrap}>
-        {(!staticMapUrl || loading) && (
+        {loading || !target ? (
           <View style={styles.center}>
             <ActivityIndicator />
-            <Text style={styles.centerText}>Calcul de l’itinéraire…</Text>
+            <Text style={styles.centerText}>Initialisation…</Text>
           </View>
-        )}
-        {!!staticMapUrl && !loading && (
-          <Image
-            source={{ uri: staticMapUrl }}
+        ) : HAS_MAPBOX && origin ? (
+          <MapboxGL.MapView
             style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-            accessible
-            accessibilityLabel="Carte avec itinéraire"
-          />
+            styleURL={MapboxGL.StyleURL.Street}
+            logoEnabled={false}
+            attributionEnabled={false}
+            compassEnabled
+          >
+            <MapboxGL.Camera
+              centerCoordinate={[origin.lng, origin.lat]}
+              zoomLevel={13}
+              animationMode="flyTo"
+              animationDuration={800}
+            />
+            {/* Position live */}
+            <MapboxGL.UserLocation visible requestsAlwaysUse={false} />
+            {/* Départ / Arrivée */}
+            <MapboxGL.PointAnnotation id="start" coordinate={[origin.lng, origin.lat]}>
+              <View style={styles.pinBlack} />
+            </MapboxGL.PointAnnotation>
+
+            <MapboxGL.PointAnnotation id="end" coordinate={[target.lng, target.lat]}>
+              <View style={styles.pinRed} />
+            </MapboxGL.PointAnnotation>
+            {/* Tracé du trajet */}
+            {routeCoords.length > 1 && (
+              <MapboxGL.ShapeSource
+                id="route"
+                shape={{
+                  type: "Feature",
+                  geometry: { type: "LineString", coordinates: routeCoords },
+                  properties: {},
+                }}
+              >
+                <MapboxGL.LineLayer
+                  id="route-line"
+                  style={{ lineWidth: 5, lineCap: "round", lineJoin: "round", lineColor: "#1e88e5" }}
+                />
+              </MapboxGL.ShapeSource>
+            )}
+          </MapboxGL.MapView>
+        ) : (
+          // Fallback image (Expo Go / pas d'origine encore)
+          staticMapUrl && (
+            <Image
+              source={{ uri: staticMapUrl }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+              accessible
+              accessibilityLabel="Carte avec itinéraire"
+            />
+          )
         )}
       </View>
 
@@ -280,7 +319,6 @@ function downsample(coords: [number, number][], maxPts: number): [number, number
   const step = Math.max(1, Math.floor(coords.length / maxPts));
   const out: [number, number][] = [];
   for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
-  // s'assurer d'inclure le dernier point
   const last = coords[coords.length - 1];
   if (out[out.length - 1] !== last) out.push(last);
   return out;
@@ -359,4 +397,20 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   centerText: { color: "#fff", marginTop: 8 },
+  pinBlack: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#000",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  pinRed: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#e53935",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
 });

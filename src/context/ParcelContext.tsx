@@ -1,9 +1,15 @@
 import React, { createContext, ReactNode, useState } from "react";
 
-// Statuts possibles d'un colis
-export type ParcelStatus = "AVAILABLE" | "ASSIGNED" | "DELIVERED";
+// 🔢 Statuts possibles d’un colis (mêmes valeurs que dans Amplify)
+export type ParcelStatus =
+  | "AVAILABLE"
+  | "ASSIGNED"
+  | "IN_PROGRESS"
+  | "DELIVERING"
+  | "DELIVERED"
+  | "CANCELLED";
 
-// Définition du type Parcel (mise à jour)
+// 🧱 Structure complète d’un colis
 export interface Parcel {
   id?: string;
   type?: string;
@@ -11,34 +17,39 @@ export interface Parcel {
   dimensions?: string | null;
   description?: string | null;
 
-  // ⬇️ Nouveaux champs (remplacent `adresse`)
   adresseDepart?: string | null;
   adresseArrivee?: string | null;
 
   status?: ParcelStatus;
+
+  // 🔗 Affectation livreur
+  assignedTo?: string | null;     // ID Cognito du livreur
+  courierName?: string | null;    // Nom public du livreur (affichage)
+
+  // 👤 Créateur / expéditeur
+  owner?: string | null;          // ID Cognito du client (expéditeur)
+
   createdAt?: string | null;
   updatedAt?: string | null;
 }
 
-// Définition du type du contexte
+// 📦 Définition du type du contexte
 interface ParcelContextType {
   pendingParcels: Parcel[];
   addParcel: (parcel: Parcel) => void;
-  // (optionnel) utilitaires pratiques si besoin plus tard
   setPendingParcels?: React.Dispatch<React.SetStateAction<Parcel[]>>;
   clearPending?: () => void;
 }
 
-// Création du contexte
+// 🧭 Création du contexte
 export const ParcelContext = createContext<ParcelContextType>({
   pendingParcels: [],
   addParcel: () => {},
 });
 
-// Nom pour debug
 ParcelContext.displayName = "ParcelContext";
 
-// Provider
+// 🚀 Provider global
 export const ParcelProvider = ({ children }: { children: ReactNode }) => {
   const [pendingParcels, setPendingParcels] = useState<Parcel[]>([]);
 
@@ -57,7 +68,7 @@ export const ParcelProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Hook personnalisé
+// 🪄 Hook pratique
 export const useParcelContext = () => {
   const context = React.useContext(ParcelContext);
   if (!context) {
