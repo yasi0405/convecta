@@ -2,7 +2,6 @@ import Colors from "@/constants/Colors";
 import { Parcel as ParcelCtx, useParcelContext } from "@/src/context/ParcelContext";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
-import { BarCodeScanner } from "expo-barcode-scanner";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+// 🔄 Nouveau: expo-camera (remplace expo-barcode-scanner déprécié)
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 type ParcelStatus =
   | "AVAILABLE"
@@ -42,8 +44,8 @@ export default function CourierPendingList() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [onlyInProgress, setOnlyInProgress] = useState<boolean>(true);
 
-  // Scan / Caméra
-  const [camStatus, setCamStatus] = useState<"undetermined" | "granted" | "denied">("undetermined");
+  // 📷 Permissions caméra via expo-camera
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanVisible, setScanVisible] = useState<boolean>(false);
   const [scanningParcel, setScanningParcel] = useState<Parcel | null>(null);
   const [scannedOnce, setScannedOnce] = useState<boolean>(false);
@@ -64,17 +66,6 @@ export default function CourierPendingList() {
         console.log("getCurrentUser error:", e);
       }
     })();
-  }, []);
-
-  const ensureCameraPermission = useCallback(async () => {
-    try {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setCamStatus(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
-      return status === "granted";
-    } catch {
-      setCamStatus("denied");
-      return false;
-    }
   }, []);
 
   // Charge les colis assignés à CE livreur
@@ -188,12 +179,14 @@ export default function CourierPendingList() {
     }
   };
 
-  // Ouvre la caméra pour scanner le QR du client et valider la livraison
+  // 📷 Ouvre la caméra pour scanner le QR du client et valider la livraison
   const openScanner = async (p: Parcel) => {
-    const ok = await ensureCameraPermission();
-    if (!ok) {
-      setScanMsg("Permission caméra refusée. Autorise la caméra dans les réglages.");
-      return;
+    if (!permission?.granted) {
+      const granted = await requestPermission();
+      if (!granted?.granted) {
+        setScanMsg("Permission caméra refusée. Autorise la caméra dans les réglages.");
+        return;
+      }
     }
     setScanningParcel(p);
     setScannedOnce(false);
@@ -202,7 +195,7 @@ export default function CourierPendingList() {
   };
 
   // Après scan → appelle verifyScan (purpose: DELIVERY)
-  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scannedOnce || !scanningParcel?.id) return;
     setScannedOnce(true);
     setScanBusy(true);
@@ -338,6 +331,8 @@ export default function CourierPendingList() {
     );
   };
 
+  const camDenied = permission && !permission.granted;
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Mes missions</Text>
@@ -387,23 +382,30 @@ export default function CourierPendingList() {
             </Pressable>
           </View>
 
-          {camStatus !== "granted" ? (
+          {camDenied ? (
             <View style={styles.scanMsgBox}>
               <Text style={styles.scanMsg}>
-                {camStatus === "denied"
-                  ? "Permission caméra refusée. Autorise la caméra dans les réglages."
-                  : "Demande de permission caméra…"}
+                Permission caméra refusée. Autorise la caméra dans les réglages.
               </Text>
-              <TouchableOpacity style={[styles.button, styles.primary]} onPress={ensureCameraPermission}>
+              <TouchableOpacity style={[styles.button, styles.primary]} onPress={requestPermission}>
                 <Text style={styles.buttonText}>Autoriser la caméra</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
               <View style={styles.scannerFrame}>
-                <BarCodeScanner
+                <CameraView
                   style={{ width: "100%", height: "100%" }}
-                  onBarCodeScanned={scanBusy ? undefined : handleBarCodeScanned}
+                  facing="back"
+                  barcodeScannerSettings={{
+                    // scanne uniquement les QR pour éviter les bruits
+                    barcodeTypes: ["qr"],
+                  }}
+                  onBarcodeScanned={
+                    scanBusy
+                      ? undefined
+                      : ({ data }) => handleBarCodeScanned({ data })
+                  }
                 />
                 <View style={styles.scanHintOverlay}>
                   <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>

@@ -14,6 +14,7 @@ export default ({ config }) => ({
       bundleIdentifier: "com.yasi82.convecta",
       buildNumber: "4",
       infoPlist: {
+        NSCameraUsageDescription: "La caméra est utilisée pour scanner les QR codes de livraison.",
         NSLocationWhenInUseUsageDescription: "Nous utilisons votre position pour centrer la carte et proposer des livraisons à proximité.",
       },
     },
