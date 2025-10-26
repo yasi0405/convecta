@@ -17,10 +17,10 @@ Amplify.configure(outputs);
 
 // 🔹 Composant interne : utilise les hooks de contexte DANS les Providers
 function AppShell() {
-  const { signOut } = useAuthenticator();     // ✅ sous <Authenticator>
-  const theme = useTheme();                   // ✅ sous <ThemeProvider>
+  const { signOut } = useAuthenticator();    
+  const theme = useTheme();   
   const pathname = usePathname();
-  const segments = useSegments() as string[]; // ✅ détection fiable des groupes
+  const segments = useSegments() as string[]; 
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
@@ -43,9 +43,14 @@ function AppShell() {
         </TouchableOpacity>
       </View>
 
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,        // on n’affiche aucun header natif
+          headerBackVisible: false,  // et donc aucun bouton “back”
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
 

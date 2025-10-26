@@ -62,6 +62,8 @@ export default function CourierNavigate() {
         }
       } catch {
         setError("Impossible d'obtenir la position actuelle.");
+      } finally {
+        setLoading(false);
       }
     })();
     return () => {
@@ -75,12 +77,10 @@ export default function CourierNavigate() {
     (async () => {
       if (!dest) {
         setError("Adresse de destination manquante.");
-        setLoading(false);
         return;
       }
       if (!MAPBOX_TOKEN) {
         setError("Clé Mapbox absente (EXPO_PUBLIC_MAPBOX_TOKEN).");
-        setLoading(false);
         return;
       }
       try {
@@ -96,8 +96,6 @@ export default function CourierNavigate() {
         setTarget({ lat, lng });
       } catch (e: any) {
         setError(e?.message ?? "Échec du géocodage.");
-      } finally {
-        setLoading(false);
       }
     })();
     return () => {
@@ -105,14 +103,29 @@ export default function CourierNavigate() {
     };
   }, [dest]);
 
-  // 3) Poll Directions toutes les 15s
+  // 3) Poll Directions toutes les 15s (robuste aux erreurs GPS)
   useEffect(() => {
     if (!MAPBOX_TOKEN || !target) return;
 
+    let cancelled = false;
+
     const getLiveRoute = async () => {
       try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const o = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        // 1) essayer position live
+        let o: Coords | null = null;
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          o = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        } catch {
+          // 2) fallback: dernière position connue
+          const last = await Location.getLastKnownPositionAsync();
+          if (last) o = { lat: last.coords.latitude, lng: last.coords.longitude };
+        }
+        // 3) fallback final: garder l’ancienne origine si dispo
+        if (!o && origin) o = origin;
+        if (!o) return; // pas d’origine → on ne casse pas la route existante
+
+        if (cancelled) return;
         setOrigin(o);
 
         const url =
@@ -124,6 +137,8 @@ export default function CourierNavigate() {
 
         const route = json?.routes?.[0];
         if (!route) throw new Error("Aucun itinéraire trouvé.");
+
+        if (cancelled) return;
 
         // ETA + distance restantes
         setEtaSec(Math.max(0, Math.round(route.duration as number))); // sec
@@ -146,7 +161,12 @@ export default function CourierNavigate() {
             : null
         );
       } catch (e: any) {
-        setError(e?.message ?? "Échec du calcul d'itinéraire.");
+        // Ne “casse” pas l’affichage si un rafraîchissement rate
+        console.log("getLiveRoute err:", e?.message || e);
+        if (!routeCoords.length) {
+          setEtaSec(null);
+          setRemainMeters(null);
+        }
       }
     };
 
@@ -158,12 +178,13 @@ export default function CourierNavigate() {
     pollRef.current = setInterval(getLiveRoute, 15000);
 
     return () => {
+      cancelled = true;
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
       }
     };
-  }, [target]);
+  }, [target, MAPBOX_TOKEN]); // origin volontairement hors deps
 
   // 4) Static map (fallback pour Expo Go)
   const staticMapUrl = useMemo(() => {
@@ -174,7 +195,7 @@ export default function CourierNavigate() {
     const sampled = downsample(routeCoords, 80);
     const path =
       sampled.length >= 2
-        ? `path-5+1e88e5-0.8(${sampled.map(([lng, lat]) => `${lng},${lat}`).join(";")})`
+        ? `path-5+1e88e5-0.9(${sampled.map(([lng, lat]) => `${lng},${lat}`).join(";")})`
         : null;
 
     if (origin && target) {
@@ -222,7 +243,7 @@ export default function CourierNavigate() {
 
       {/* 🗺️ Carte : MapboxGL interactif (iOS build/Dev Client) OU image statique (Expo Go) */}
       <View style={styles.mapWrap}>
-        {loading || !target ? (
+        {(!target || loading) ? (
           <View style={styles.center}>
             <ActivityIndicator />
             <Text style={styles.centerText}>Initialisation…</Text>
@@ -235,14 +256,17 @@ export default function CourierNavigate() {
             attributionEnabled={false}
             compassEnabled
           >
+            {/* Zoom fort quand on est très proche */}
             <MapboxGL.Camera
               centerCoordinate={[origin.lng, origin.lat]}
-              zoomLevel={13}
+              zoomLevel={remainMeters != null && remainMeters < 30 ? 18 : 13}
               animationMode="flyTo"
-              animationDuration={800}
+              animationDuration={700}
             />
+
             {/* Position live */}
             <MapboxGL.UserLocation visible requestsAlwaysUse={false} />
+
             {/* Départ / Arrivée */}
             <MapboxGL.PointAnnotation id="start" coordinate={[origin.lng, origin.lat]}>
               <View style={styles.pinBlack} />
@@ -251,7 +275,8 @@ export default function CourierNavigate() {
             <MapboxGL.PointAnnotation id="end" coordinate={[target.lng, target.lat]}>
               <View style={styles.pinRed} />
             </MapboxGL.PointAnnotation>
-            {/* Tracé du trajet */}
+
+            {/* Tracé du trajet (casing blanc + ligne bleue, au-dessus des labels) */}
             {routeCoords.length > 1 && (
               <MapboxGL.ShapeSource
                 id="route"
@@ -262,8 +287,26 @@ export default function CourierNavigate() {
                 }}
               >
                 <MapboxGL.LineLayer
+                  id="route-casing"
+                  aboveLayerID="road-label"
+                  style={{
+                    lineWidth: 8,
+                    lineColor: "#ffffff",
+                    lineOpacity: 0.85,
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
+                />
+                <MapboxGL.LineLayer
                   id="route-line"
-                  style={{ lineWidth: 5, lineCap: "round", lineJoin: "round", lineColor: "#1e88e5" }}
+                  aboveLayerID="road-label"
+                  style={{
+                    lineWidth: 5,
+                    lineColor: "#1e88e5",
+                    lineOpacity: 0.98,
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
                 />
               </MapboxGL.ShapeSource>
             )}

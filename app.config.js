@@ -3,7 +3,7 @@ export default ({ config }) => ({
   expo: {
     name: "convecta",
     slug: "convecta",
-    version: "1.0.12",
+    version: "1.0.13",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "convecta",
@@ -48,6 +48,7 @@ export default ({ config }) => ({
         },
       ],
       "expo-audio",
+      "expo-barcode-scanner",
       "expo-location",
       "expo-asset",
       [
@@ -67,7 +68,7 @@ export default ({ config }) => ({
         projectId: "87d19859-6b3f-4665-99fc-e47ffcb8b914",
       },
     },
-    runtimeVersion: "1.0.12",
+    runtimeVersion: "1.0.13",
     updates: {
       url: "https://u.expo.dev/87d19859-6b3f-4665-99fc-e47ffcb8b914",
     },

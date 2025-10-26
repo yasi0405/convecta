@@ -28,9 +28,9 @@
   "data": {
     "url": "https://j3p26gdxfnh2tpiobp4pgq5jzu.appsync-api.us-east-1.amazonaws.com/graphql",
     "aws_region": "us-east-1",
-    "default_authorization_type": "AWS_IAM",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
     "authorization_types": [
-      "AMAZON_COGNITO_USER_POOLS"
+      "AWS_IAM"
     ],
     "model_introspection": {
       "version": 1,
@@ -117,6 +117,83 @@
               "isRequired": false,
               "attributes": []
             },
+            "receiverId": {
+              "name": "receiverId",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "pickupCodeHash": {
+              "name": "pickupCodeHash",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "pickupCodeExp": {
+              "name": "pickupCodeExp",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "pickupScannedAt": {
+              "name": "pickupScannedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "pickupScannedBy": {
+              "name": "pickupScannedBy",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveryCodeHash": {
+              "name": "deliveryCodeHash",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveryCodeExp": {
+              "name": "deliveryCodeExp",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveredAt": {
+              "name": "deliveredAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveryScannedBy": {
+              "name": "deliveryScannedBy",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "paymentIntentId": {
+              "name": "paymentIntentId",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "paymentStatus": {
+              "name": "paymentStatus",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
             "createdAt": {
               "name": "createdAt",
               "isArray": false,
@@ -180,9 +257,209 @@
             "DELIVERED",
             "CANCELLED"
           ]
+        },
+        "ScanPurpose": {
+          "name": "ScanPurpose",
+          "values": [
+            "PICKUP",
+            "DELIVERY"
+          ]
         }
       },
-      "nonModels": {}
+      "nonModels": {
+        "GenerateScanCodeResult": {
+          "name": "GenerateScanCodeResult",
+          "fields": {
+            "code": {
+              "name": "code",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "purpose": {
+              "name": "purpose",
+              "isArray": false,
+              "type": {
+                "enum": "ScanPurpose"
+              },
+              "isRequired": false,
+              "attributes": []
+            },
+            "exp": {
+              "name": "exp",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "kid": {
+              "name": "kid",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "VerifyScanResult": {
+          "name": "VerifyScanResult",
+          "fields": {
+            "ok": {
+              "name": "ok",
+              "isArray": false,
+              "type": "Boolean",
+              "isRequired": false,
+              "attributes": []
+            },
+            "newStatus": {
+              "name": "newStatus",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "parcelId": {
+              "name": "parcelId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": false,
+              "attributes": []
+            },
+            "stampedAt": {
+              "name": "stampedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "GenerateScanCodeReturnType": {
+          "name": "GenerateScanCodeReturnType",
+          "fields": {
+            "code": {
+              "name": "code",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "purpose": {
+              "name": "purpose",
+              "isArray": false,
+              "type": {
+                "enum": "ScanPurpose"
+              },
+              "isRequired": false,
+              "attributes": []
+            },
+            "exp": {
+              "name": "exp",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "kid": {
+              "name": "kid",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "VerifyScanReturnType": {
+          "name": "VerifyScanReturnType",
+          "fields": {
+            "ok": {
+              "name": "ok",
+              "isArray": false,
+              "type": "Boolean",
+              "isRequired": false,
+              "attributes": []
+            },
+            "newStatus": {
+              "name": "newStatus",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "parcelId": {
+              "name": "parcelId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": false,
+              "attributes": []
+            },
+            "stampedAt": {
+              "name": "stampedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        }
+      },
+      "mutations": {
+        "generateScanCode": {
+          "name": "generateScanCode",
+          "isArray": false,
+          "type": {
+            "nonModel": "GenerateScanCodeReturnType"
+          },
+          "isRequired": false,
+          "arguments": {
+            "parcelId": {
+              "name": "parcelId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true
+            },
+            "purpose": {
+              "name": "purpose",
+              "isArray": false,
+              "type": {
+                "enum": "ScanPurpose"
+              },
+              "isRequired": true
+            }
+          }
+        },
+        "verifyScan": {
+          "name": "verifyScan",
+          "isArray": false,
+          "type": {
+            "nonModel": "VerifyScanReturnType"
+          },
+          "isRequired": false,
+          "arguments": {
+            "parcelId": {
+              "name": "parcelId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true
+            },
+            "purpose": {
+              "name": "purpose",
+              "isArray": false,
+              "type": {
+                "enum": "ScanPurpose"
+              },
+              "isRequired": true
+            },
+            "code": {
+              "name": "code",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        }
+      }
     }
   },
   "version": "1.4"

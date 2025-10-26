@@ -274,32 +274,30 @@ export default function NewParcel() {
       setError(null);
 
       // ✅ Vérifie si utilisateur connecté
-      let user = null;
-      try {
-        user = await getCurrentUser();
-        console.log("✅ Utilisateur connecté :", user);
-      } catch (err) {
-        console.log("❌ Aucun utilisateur connecté :", err);
-        user = null;
-      }
-
+      const user = await getCurrentUser().catch(() => null);
       if (!user) {
         notify("Non connecté", "Tu dois être connecté pour créer un colis. Connecte-toi avant de continuer.");
         return;
       }
+      const ownerId =
+        (user as any)?.username ||
+        (user as any)?.userId ||
+        "unknown";
 
       const now = new Date().toISOString();
 
-      // 🆕 On enregistre adresseDepart + adresseArrivee
+      // ✅ IMPORTANT : ne jamais envoyer undefined/null pour les String! (mettre "" si vide)
       const res = await client.models.Parcel.create(
         {
-          type,
+          type: (type ?? "").trim(),                         // String!
           poids: Number.isFinite(poidsNum as number) ? (poidsNum as number) : undefined,
-          dimensions: dimensions?.trim() || undefined,
-          description: description?.trim() || undefined,
-          adresseDepart: adresseDepart.trim(),
-          adresseArrivee: adresseArrivee.trim(),
-          status: "AVAILABLE",
+          dimensions: (dimensions ?? "").trim(),             // String! -> "" si vide
+          description: (description ?? "").trim(),           // String! -> "" si vide
+          adresseDepart: (adresseDepart ?? "").trim(),       // String!
+          adresseArrivee: (adresseArrivee ?? "").trim(),     // String!
+          status: "AVAILABLE",                               // Enum
+          owner: ownerId,                                    // 🔑 requis si schema: String!
+          receiverId: ownerId,                               // 🔑 si schema: String! (sinon inoffensif)
           createdAt: now,
           updatedAt: now,
         } as any,
