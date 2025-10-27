@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-// 🔄 Nouveau: expo-camera (remplace expo-barcode-scanner déprécié)
+// 🔄 expo-camera (remplace expo-barcode-scanner déprécié)
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -293,7 +293,7 @@ export default function CourierPendingList() {
         <Text style={styles.cardText}>Arrivée : {fmt(item.adresseArrivee)}</Text>
 
         <View style={styles.actionsRow}>
-          {/* 🟩 Bouton vert : Scanner la validation de réception (toujours visible) */}
+          {/* 🟩 Bouton vert : Scanner la validation de réception */}
           <TouchableOpacity style={[styles.button, styles.validate]} onPress={() => openScanner(item)}>
             <Text style={styles.validateText}>Scanner réception</Text>
           </TouchableOpacity>
@@ -374,51 +374,59 @@ export default function CourierPendingList() {
       )}
 
       {/* Modal Scan Caméra */}
-      <Modal animationType="slide" visible={scanVisible} onRequestClose={() => setScanVisible(false)}>
-        <SafeAreaView style={styles.scanContainer} edges={["top","right","bottom","left"]}>
-          <View style={styles.scanHeader}>
-            <Text style={styles.scanTitle}>Scanner le QR du client</Text>
-            <Pressable onPress={() => setScanVisible(false)}>
-              <Text style={styles.scanClose}>Fermer ✕</Text>
-            </Pressable>
-          </View>
-
-          {camDenied ? (
-            <View style={styles.scanMsgBox}>
-              <Text style={styles.scanMsg}>
-                Permission caméra refusée. Autorise la caméra dans les réglages.
-              </Text>
-              <TouchableOpacity style={[styles.button, styles.primary]} onPress={requestPermission}>
-                <Text style={styles.buttonText}>Autoriser la caméra</Text>
-              </TouchableOpacity>
+      <Modal
+        animationType="slide"
+        visible={scanVisible}
+        onRequestClose={() => setScanVisible(false)}
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+      >
+        <SafeAreaView style={styles.modalSafe} edges={["top"]}>
+          <View style={styles.modalInner}>
+            <View style={styles.scanHeader}>
+              <Text style={styles.scanTitle}>Scanner le QR du client</Text>
+              <Pressable onPress={() => setScanVisible(false)}>
+                <Text style={styles.scanClose}>Fermer ✕</Text>
+              </Pressable>
             </View>
-          ) : (
-            <>
-              <View style={styles.scannerFrame}>
-                <CameraView
-                  style={{ width: "100%", height: "100%" }}
-                  facing="back"
-                  barcodeScannerSettings={{
-                    // scanne uniquement les QR pour éviter les bruits
-                    barcodeTypes: ["qr"],
-                  }}
-                  onBarcodeScanned={
-                    scanBusy
-                      ? undefined
-                      : ({ data }) => handleBarCodeScanned({ data })
-                  }
-                />
-                <View style={styles.scanHintOverlay}>
-                  <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>
-                </View>
-              </View>
 
-              <View style={styles.scanFooter}>
-                {scanMsg ? <Text style={styles.scanMsg}>{scanMsg}</Text> : null}
-                {scanBusy ? <ActivityIndicator /> : null}
+            {camDenied ? (
+              <View style={styles.scanMsgBox}>
+                <Text style={styles.scanMsg}>
+                  Permission caméra refusée. Autorise la caméra dans les réglages.
+                </Text>
+                <TouchableOpacity style={[styles.button, styles.primary]} onPress={requestPermission}>
+                  <Text style={styles.buttonText}>Autoriser la caméra</Text>
+                </TouchableOpacity>
               </View>
-            </>
-          )}
+            ) : (
+              <>
+                <View style={styles.scannerFrame}>
+                  <CameraView
+                    style={styles.cameraFill}
+                    facing="back"
+                    barcodeScannerSettings={{
+                      // scanne uniquement les QR pour éviter les bruits
+                      barcodeTypes: ["qr"],
+                    }}
+                    onBarcodeScanned={
+                      scanBusy
+                        ? undefined
+                        : ({ data }) => handleBarCodeScanned({ data })
+                    }
+                  />
+                  <View style={styles.scanHintOverlay}>
+                    <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>
+                  </View>
+                </View>
+
+                <View style={styles.scanFooter}>
+                  {scanMsg ? <Text style={styles.scanMsg}>{scanMsg}</Text> : null}
+                  {scanBusy ? <ActivityIndicator /> : null}
+                </View>
+              </>
+            )}
+          </View>
         </SafeAreaView>
       </Modal>
     </View>
@@ -480,20 +488,32 @@ const styles = StyleSheet.create({
   },
   refreshText: { color: Colors.buttonText, fontWeight: "bold" },
 
-  // Scanner
-  scanContainer: { flex: 1, backgroundColor: Colors.background, paddingTop: 16, paddingHorizontal: 16 },
+  /* ───────── Modal Camera Layout ───────── */
+  modalSafe: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalInner: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    // pas de paddingTop ici: il vient du SafeArea (edges=["top"])
+  },
+
   scanHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   scanTitle: { fontSize: 18, fontWeight: "700", color: Colors.text },
   scanClose: { color: Colors.textOnCard },
 
   scannerFrame: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: "#000",
   },
+  cameraFill: { width: "100%", height: "100%" },
+
   scanHintOverlay: {
     position: "absolute",
     bottom: 12,

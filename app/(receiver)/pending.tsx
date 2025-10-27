@@ -3,6 +3,7 @@ import { Parcel } from "@/src/context/ParcelContext";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -16,7 +17,7 @@ import {
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 
-// 🔳 QR Code
+// 🔳 QR Code (nécessite react-native-svg)
 import QRCode from "react-native-qrcode-svg";
 
 // 🧭 Navigation (adapter la route si besoin)
@@ -46,12 +47,16 @@ type ParcelWithAssign = Parcel & {
 
 const client = generateClient<any>();
 
+// ✅ Taille QR robuste (web + natif)
+const qrBaseWidth = Dimensions.get("window").width || 360;
+const QR_SIZE = Math.min(360, Math.round(qrBaseWidth * 0.8));
+
 export default function ParcelList() {
   const router = useRouter();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // 👇 NOUVEAU : Colis en attente (de CE client uniquement)
+  // 👇 Colis en attente (de CE client uniquement)
   const [myPendingParcels, setMyPendingParcels] = useState<ParcelWithAssign[]>([]);
   const [loadingMyPending, setLoadingMyPending] = useState(false);
 
@@ -83,7 +88,7 @@ export default function ParcelList() {
     })();
   }, []);
 
-  // 🔎 NOUVEAU : charge les colis créés par CE client et encore disponibles (non pris)
+  // 🔎 charge les colis créés par CE client et encore disponibles (non pris)
   const loadMyPendingParcels = useCallback(async () => {
     if (!currentUserId) return;
     setLoadingMyPending(true);
@@ -196,7 +201,6 @@ export default function ParcelList() {
   const handleEditParcel = (p: ParcelWithAssign) => {
     if (!p?.id) return;
 
-    // On limite aux champs utiles pour pré-remplir ton formulaire de /home
     const prefill = {
       id: p.id,
       type: p.type ?? "",
@@ -208,11 +212,10 @@ export default function ParcelList() {
       status: p.status ?? "",
     };
 
-    // Expo Router encode déjà les params, mais on sécurise en JSON.stringify
     const prefillStr = JSON.stringify(prefill);
 
     router.push({
-      pathname: "/home", // le /home du client (dans le groupe (receiver))
+      pathname: "/home",
       params: { prefill: prefillStr },
     });
   };
@@ -361,36 +364,42 @@ export default function ParcelList() {
       )}
 
       {/* 🖼️ Modal plein écran avec le QR */}
-      <Modal animationType="slide" visible={qrVisible} onRequestClose={() => setQrVisible(false)}>
-        <SafeAreaView style={styles.qrContainer} edges={["top","right","bottom","left"]}>
-          <View style={styles.qrHeader}>
-            <Text style={styles.qrTitle}>QR de validation de réception</Text>
-            <Pressable onPress={() => setQrVisible(false)}>
-              <Text style={styles.qrClose}>Fermer ✕</Text>
-            </Pressable>
-          </View>
+      <Modal
+        animationType="slide"
+        visible={qrVisible}
+        onRequestClose={() => setQrVisible(false)}
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+      >
+        <SafeAreaView style={styles.modalSafe} edges={["top"]}>
+          <View style={styles.modalInner}>
+            <View style={styles.qrHeader}>
+              <Text style={styles.qrTitle}>QR de validation de réception</Text>
+              <Pressable onPress={() => setQrVisible(false)}>
+                <Text style={styles.qrClose}>Fermer ✕</Text>
+              </Pressable>
+            </View>
 
-          <View style={styles.qrBody}>
-            {qrError ? (
-              <Text style={styles.qrError}>{qrError}</Text>
-            ) : qrValue ? (
-              <>
-                <View style={styles.qrBox}>
-                  <QRCode
-                    value={qrValue}
-                    size={Math.min(360, Math.round((typeof window !== "undefined" ? window.innerWidth : 360) * 0.8))}
-                  />
-                </View>
-                <Text style={styles.qrHint}>
-                  Montre ce QR au livreur pour valider la réception.
-                </Text>
-                {qrParcel?.id ? (
-                  <Text style={styles.qrMeta}>Colis #{String(qrParcel.id).slice(0, 8)}…</Text>
-                ) : null}
-              </>
-            ) : (
-              <ActivityIndicator />
-            )}
+            <View style={styles.qrBody}>
+              {qrError ? (
+                <Text style={styles.qrError}>{qrError}</Text>
+              ) : qrValue ? (
+                <>
+                  <View style={styles.qrBox}>
+                    {/* ❗️Taille sûre pour iOS/Android via Dimensions */}
+                    <QRCode value={qrValue} size={QR_SIZE} />
+                  </View>
+                  <Text style={styles.qrHint}>
+                    Montre ce QR au livreur pour valider la réception.
+                  </Text>
+                  {qrParcel?.id ? (
+                    <Text style={styles.qrMeta}>Colis #{String(qrParcel.id).slice(0, 8)}…</Text>
+                  ) : null}
+                </>
+              ) : (
+                <ActivityIndicator />
+              )}
+            </View>
           </View>
         </SafeAreaView>
       </Modal>
@@ -458,8 +467,17 @@ const styles = StyleSheet.create({
   },
   editButtonText: { color: Colors.textOnCard, fontWeight: "700" },
 
-  // Modal QR
-  qrContainer: { flex: 1, backgroundColor: Colors.background, paddingTop: 16, paddingHorizontal: 16 },
+  /* ───────── Modal QR Layout ───────── */
+  modalSafe: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalInner: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+
   qrHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   qrTitle: { fontSize: 18, fontWeight: "700", color: Colors.text },
   qrClose: { color: Colors.textOnCard },
@@ -472,7 +490,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderWidth: 1,
   },
-  qrHint: { color: Colors.textOnCard, opacity: 0.8, marginTop: 10 },
+  qrHint: { color: Colors.textOnCard, opacity: 0.8, marginTop: 10, textAlign: "center" },
   qrMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
   qrError: { color: "#ff6b6b", textAlign: "center" },
 });
