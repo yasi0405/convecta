@@ -16,6 +16,7 @@ import {
 
 // 🔄 Nouveau: expo-camera (remplace expo-barcode-scanner déprécié)
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type ParcelStatus =
   | "AVAILABLE"
@@ -374,7 +375,7 @@ export default function CourierPendingList() {
 
       {/* Modal Scan Caméra */}
       <Modal animationType="slide" visible={scanVisible} onRequestClose={() => setScanVisible(false)}>
-        <View style={styles.scanContainer}>
+        <SafeAreaView style={styles.scanContainer} edges={["top","right","bottom","left"]}>
           <View style={styles.scanHeader}>
             <Text style={styles.scanTitle}>Scanner le QR du client</Text>
             <Pressable onPress={() => setScanVisible(false)}>
@@ -418,7 +419,7 @@ export default function CourierPendingList() {
               </View>
             </>
           )}
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );

@@ -1,9 +1,10 @@
-import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
+import { type ClientSchema, a, defineData, defineFunction } from "@aws-amplify/backend";
 
 /**
  * 🎯 Convecta — Schéma Data (Parcels + QR sécurisé)
- * - Fix: enregistre bien ScanPurpose dans le schema avant usage
+ * - Fix: référence directe à la Lambda scanFn
  * - Fix: évite les String! manquants (owner rendu optionnel)
+ * - Fix: corrige la définition de ScanPurpose et ParcelStatus
  */
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -26,10 +27,10 @@ const ScanPurpose = a.enum(["PICKUP", "DELIVERY"]);
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const GenerateScanCodeResult = a.customType({
-  code: a.string(),               // code signé (JWT ou autre)
-  purpose: a.ref("ScanPurpose"),  // PICKUP | DELIVERY
-  exp: a.datetime(),              // expiration du code
-  kid: a.string(),                // key id utilisée pour signer
+  code: a.string(),              // code signé (JWT ou autre)
+  purpose: a.ref("ScanPurpose"), // PICKUP | DELIVERY
+  exp: a.datetime(),             // expiration du code
+  kid: a.string(),               // key id utilisée pour signer
 });
 
 const VerifyScanResult = a.customType({
@@ -61,9 +62,7 @@ const Parcel = a
     courierName: a.string(),
 
     // Acteurs
-    // NOTE: rendu optionnel pour éviter l'erreur "String!" si non envoyé par l'app
-    // Si tu veux forcer l'envoi côté client, ajoute .required() ici.
-    owner: a.string(),
+    owner: a.string(), // rendu optionnel
     receiverId: a.string(),
 
     // QR sécurisés (hash/exp et traces de scan)
@@ -81,19 +80,27 @@ const Parcel = a
     paymentIntentId: a.string(),
     paymentStatus: a.string(),
 
-    // Timestamps (gérés par l’app si tu veux, ils ne sont pas requis)
+    // Timestamps
     createdAt: a.datetime(),
     updatedAt: a.datetime(),
   })
   .authorization((allow) => [
-    // Lecture publique (landing / liste publique si besoin)
     allow.guest().to(["read"]),
-    // Utilisateurs connectés : créer, lire, mettre à jour
     allow.authenticated().to(["create", "read", "update"]),
   ]);
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/* Schéma                                                                    */
+/* Lambda Functions                                                          */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+// 🔹 Déclaration explicite de la Lambda utilisée par les mutations QR
+export const scanFn = defineFunction({
+  name: "scanFn",
+  entry: "../functions/scanFn.ts", // chemin relatif à ce fichier
+});
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Schéma principal                                                          */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const schema = a.schema({
@@ -111,7 +118,7 @@ const schema = a.schema({
       purpose: a.ref("ScanPurpose").required(),
     })
     .returns(GenerateScanCodeResult)
-    .handler(a.handler.function("scanFn"))
+    .handler(a.handler.function(scanFn)) // ✅ référence correcte à la Lambda
     .authorization((allow) => [allow.authenticated()]),
 
   // Vérification d'un QR (scan côté livreur)
@@ -123,7 +130,7 @@ const schema = a.schema({
       code: a.string().required(),
     })
     .returns(VerifyScanResult)
-    .handler(a.handler.function("scanFn"))
+    .handler(a.handler.function(scanFn)) // ✅ même handler
     .authorization((allow) => [allow.authenticated()]),
 });
 

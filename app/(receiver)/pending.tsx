@@ -1,5 +1,5 @@
 import Colors from "@/constants/Colors";
-import { Parcel, useParcelContext } from "@/src/context/ParcelContext";
+import { Parcel } from "@/src/context/ParcelContext";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,12 +17,16 @@ import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 
 // 🔳 QR Code
-// npx expo install react-native-qrcode-svg
 import QRCode from "react-native-qrcode-svg";
 
-// ⚙️ Typage souple si ton ParcelContext n’a pas encore ces champs
+// 🧭 Navigation (adapter la route si besoin)
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+// ⚙️ Typage souple (on ajoute owner + assignedTo + status)
 type ParcelWithAssign = Parcel & {
   id?: string;
+  owner?: string | null;
   status?:
     | "AVAILABLE"
     | "ASSIGNED"
@@ -31,7 +35,7 @@ type ParcelWithAssign = Parcel & {
     | "DELIVERED"
     | "CANCELLED";
   assignedTo?: string | null;
-  courierName?: string | null; // si tu l’enregistres lors de l’acceptation
+  courierName?: string | null;
   adresseDepart?: string | null;
   adresseArrivee?: string | null;
   type?: string | null;
@@ -43,11 +47,17 @@ type ParcelWithAssign = Parcel & {
 const client = generateClient<any>();
 
 export default function ParcelList() {
-  const { pendingParcels } = useParcelContext();
+  const router = useRouter();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // 👇 NOUVEAU : Colis en attente (de CE client uniquement)
+  const [myPendingParcels, setMyPendingParcels] = useState<ParcelWithAssign[]>([]);
+  const [loadingMyPending, setLoadingMyPending] = useState(false);
+
+  // ✅ Colis pris en charge (de CE client) — utile pour QR
   const [takenParcels, setTakenParcels] = useState<ParcelWithAssign[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingTaken, setLoadingTaken] = useState(false);
 
   // UI state pour le QR plein écran
   const [qrVisible, setQrVisible] = useState(false);
@@ -61,7 +71,6 @@ export default function ParcelList() {
     (async () => {
       try {
         const user = await getCurrentUser();
-        // Selon ta version Amplify, ça peut être user.userId / user.username / user.signInDetails?.loginId
         const uid =
           (user as any)?.userId ??
           (user as any)?.username ??
@@ -74,27 +83,65 @@ export default function ParcelList() {
     })();
   }, []);
 
-  // 🔎 Charge les colis de CE client (owner = client) déjà pris en charge (utile pour QR)
-  const loadTakenParcels = useCallback(async () => {
+  // 🔎 NOUVEAU : charge les colis créés par CE client et encore disponibles (non pris)
+  const loadMyPendingParcels = useCallback(async () => {
     if (!currentUserId) return;
-    setLoading(true);
+    setLoadingMyPending(true);
     try {
       const res = await client.models.Parcel.list({
-        // Amplify v6 — params + authMode dans un seul objet
         filter: {
           owner: { eq: currentUserId },
-          or: [
-            { status: { eq: "ASSIGNED" } },
-            { status: { eq: "IN_PROGRESS" } },
-            { status: { eq: "DELIVERING" } },
-            // on peut inclure DELIVERED si tu veux afficher aussi livrés
+          and: [
+            {
+              or: [
+                { status: { eq: "AVAILABLE" } },
+                { status: { eq: null as any } }, // tolérance si le status n'est pas encore défini
+              ],
+            },
+            {
+              or: [
+                { assignedTo: { attributeExists: false } as any },
+                { assignedTo: { eq: null as any } },
+                { assignedTo: { eq: "" as any } },
+              ],
+            },
           ],
         },
         limit: 100,
         authMode: "userPool",
       });
 
-      // Compatibilité selon les versions : res.data ? res.data : res.items
+      const items: ParcelWithAssign[] =
+        (res?.data as ParcelWithAssign[]) ??
+        ((res as any)?.items as ParcelWithAssign[]) ??
+        [];
+
+      setMyPendingParcels(items);
+    } catch (e) {
+      console.log("loadMyPendingParcels error:", e);
+    } finally {
+      setLoadingMyPending(false);
+    }
+  }, [currentUserId]);
+
+  // 🔎 Colis pris en charge (ASSIGNED / IN_PROGRESS / DELIVERING)
+  const loadTakenParcels = useCallback(async () => {
+    if (!currentUserId) return;
+    setLoadingTaken(true);
+    try {
+      const res = await client.models.Parcel.list({
+        filter: {
+          owner: { eq: currentUserId },
+          or: [
+            { status: { eq: "ASSIGNED" } },
+            { status: { eq: "IN_PROGRESS" } },
+            { status: { eq: "DELIVERING" } },
+          ],
+        },
+        limit: 100,
+        authMode: "userPool",
+      });
+
       const items: ParcelWithAssign[] =
         (res?.data as ParcelWithAssign[]) ??
         ((res as any)?.items as ParcelWithAssign[]) ??
@@ -104,13 +151,14 @@ export default function ParcelList() {
     } catch (e) {
       console.log("loadTakenParcels error:", e);
     } finally {
-      setLoading(false);
+      setLoadingTaken(false);
     }
   }, [currentUserId]);
 
   useEffect(() => {
+    loadMyPendingParcels();
     loadTakenParcels();
-  }, [loadTakenParcels]);
+  }, [loadMyPendingParcels, loadTakenParcels]);
 
   // ▶️ Génère un code signé infalsifiable pour finaliser la réception (purpose = DELIVERY)
   const handleShowDeliveryQR = async (p: ParcelWithAssign) => {
@@ -118,20 +166,13 @@ export default function ParcelList() {
     setQrError(null);
     setQrBusyForId(String(p.id));
     try {
-      // Appelle ta mutation backend qui signe le code côté serveur
-      // Retour attendu: { code, purpose, exp, kid } (cf. ton resource.ts)
       const resp = await (client as any).mutations.generateScanCode({
         parcelId: String(p.id),
         purpose: "DELIVERY",
         authMode: "userPool",
       });
 
-      // Selon ton resolver, adapte la façon de lire la réponse
-      const payload =
-        resp?.data?.generateScanCode ??
-        resp?.data ??
-        resp;
-
+      const payload = resp?.data?.generateScanCode ?? resp?.data ?? resp;
       const code = payload?.code ?? payload?.data?.code ?? null;
 
       if (!code) {
@@ -149,6 +190,31 @@ export default function ParcelList() {
     } finally {
       setQrBusyForId(null);
     }
+  };
+
+  // ✏️ Bouton "Modifier" — renvoie vers /home avec les données en paramètre `prefill`
+  const handleEditParcel = (p: ParcelWithAssign) => {
+    if (!p?.id) return;
+
+    // On limite aux champs utiles pour pré-remplir ton formulaire de /home
+    const prefill = {
+      id: p.id,
+      type: p.type ?? "",
+      description: p.description ?? "",
+      poids: p.poids ?? "",
+      dimensions: p.dimensions ?? "",
+      adresseDepart: p.adresseDepart ?? "",
+      adresseArrivee: p.adresseArrivee ?? "",
+      status: p.status ?? "",
+    };
+
+    // Expo Router encode déjà les params, mais on sécurise en JSON.stringify
+    const prefillStr = JSON.stringify(prefill);
+
+    router.push({
+      pathname: "/home", // le /home du client (dans le groupe (receiver))
+      params: { prefill: prefillStr },
+    });
   };
 
   const fmt = (v?: string | number | null) =>
@@ -170,7 +236,7 @@ export default function ParcelList() {
       ? "Livré"
       : s ?? "—";
 
-  // 🟩 Bouton vert à droite (QR)
+  // 🟩 Bouton QR (utilisé pour la section "pris en charge")
   const RenderQRButton = ({ parcel }: { parcel: ParcelWithAssign }) => (
     <TouchableOpacity
       style={styles.qrButton}
@@ -187,14 +253,27 @@ export default function ParcelList() {
     </TouchableOpacity>
   );
 
-  const renderPending = ({ item }: { item: Parcel }) => {
-    const p = item as ParcelWithAssign;
+  // ✏️ Bouton Modifier
+  const RenderEditButton = ({ parcel }: { parcel: ParcelWithAssign }) => (
+    <TouchableOpacity
+      style={styles.editButton}
+      onPress={() => handleEditParcel(parcel)}
+      accessibilityRole="button"
+      accessibilityLabel="Modifier les informations du colis"
+    >
+      <Text style={styles.editButtonText}>Modifier</Text>
+    </TouchableOpacity>
+  );
+
+  // Rendu d’un colis EN ATTENTE (du client) — bouton Modifier
+  const renderMyPending = ({ item }: { item: ParcelWithAssign }) => {
+    const p = item;
     return (
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>📦 {fmt(p.type ?? "Colis")}</Text>
-          {/* Bouton vert à droite */}
-          <RenderQRButton parcel={p} />
+          {/* Bouton Modifier à droite */}
+          <RenderEditButton parcel={p} />
         </View>
 
         {p.poids ? <Text style={styles.cardText}>Poids : {fmtKg(p.poids)}</Text> : null}
@@ -202,10 +281,14 @@ export default function ParcelList() {
         {p.description ? <Text style={styles.cardText}>Description : {fmt(p.description)}</Text> : null}
         {p.adresseDepart ? <Text style={styles.cardText}>Départ : {fmt(p.adresseDepart)}</Text> : null}
         {p.adresseArrivee ? <Text style={styles.cardText}>Arrivée : {fmt(p.adresseArrivee)}</Text> : null}
+        <Text style={[styles.badge, { alignSelf: "flex-start", marginTop: 6 }]}>
+          Statut : {statusFR(p.status)}
+        </Text>
       </View>
     );
   };
 
+  // Rendu d’un colis PRIS EN CHARGE — bouton QR
   const renderTaken = ({ item }: { item: ParcelWithAssign }) => {
     const who =
       item.courierName?.trim() ||
@@ -215,7 +298,6 @@ export default function ParcelList() {
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>📦 {fmt(item.type ?? "Colis")}</Text>
-          {/* Bouton vert à droite */}
           <RenderQRButton parcel={item} />
         </View>
 
@@ -239,25 +321,31 @@ export default function ParcelList() {
 
   return (
     <View style={styles.container}>
+      {/* 🟡 Colis en attente (créés par CE client et non pris) */}
       <Text style={styles.title}>Colis en attente</Text>
 
-      {pendingParcels.length === 0 ? (
-        <Text style={styles.cardText}>Aucun colis pour le moment.</Text>
+      {myPendingParcels.length === 0 ? (
+        <Text style={styles.cardText}>
+          {loadingMyPending ? "Chargement..." : "Aucun colis en attente."}
+        </Text>
       ) : (
         <>
-          <FlatList<Parcel>
-            data={pendingParcels}
-            keyExtractor={(_, index) => `pending-${index}`}
-            renderItem={renderPending}
+          <FlatList
+            data={myPendingParcels}
+            keyExtractor={(item, index) => (item as any)?.id ?? `pending-${index}`}
+            renderItem={renderMyPending}
           />
+          <TouchableOpacity style={styles.button} onPress={loadMyPendingParcels}>
+            <Text style={styles.buttonText}>{loadingMyPending ? "Chargement…" : "Rafraîchir les colis en attente"}</Text>
+          </TouchableOpacity>
         </>
       )}
 
-      {/* 🔥 Section : Colis de ce client déjà pris en charge */}
+      {/* 🔥 Colis de ce client déjà pris en charge */}
       <Text style={[styles.title, { marginTop: 28 }]}>Colis pris en charge</Text>
       {takenParcels.length === 0 ? (
         <Text style={styles.cardText}>
-          {loading ? "Chargement..." : "Aucun colis pris en charge pour le moment."}
+          {loadingTaken ? "Chargement..." : "Aucun colis pris en charge pour le moment."}
         </Text>
       ) : (
         <>
@@ -267,14 +355,14 @@ export default function ParcelList() {
             renderItem={renderTaken}
           />
           <TouchableOpacity style={styles.button} onPress={loadTakenParcels}>
-            <Text style={styles.buttonText}>{loading ? "Chargement…" : "Rafraîchir les colis pris en charge"}</Text>
+            <Text style={styles.buttonText}>{loadingTaken ? "Chargement…" : "Rafraîchir les colis pris en charge"}</Text>
           </TouchableOpacity>
         </>
       )}
 
       {/* 🖼️ Modal plein écran avec le QR */}
       <Modal animationType="slide" visible={qrVisible} onRequestClose={() => setQrVisible(false)}>
-        <View style={styles.qrContainer}>
+        <SafeAreaView style={styles.qrContainer} edges={["top","right","bottom","left"]}>
           <View style={styles.qrHeader}>
             <Text style={styles.qrTitle}>QR de validation de réception</Text>
             <Pressable onPress={() => setQrVisible(false)}>
@@ -304,7 +392,7 @@ export default function ParcelList() {
               <ActivityIndicator />
             )}
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -346,9 +434,9 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: Colors.buttonText, fontSize: 16, fontWeight: "bold" },
 
-  // 🟩 Bouton QR à droite
+  // 🟩 Bouton QR (section pris en charge)
   qrButton: {
-    backgroundColor: "#1DB954", // vert style "validate"
+    backgroundColor: "#1DB954",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -356,6 +444,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   qrButtonText: { color: "#fff", fontWeight: "700" },
+
+  // ✏️ Bouton Modifier (section en attente)
+  editButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  editButtonText: { color: Colors.textOnCard, fontWeight: "700" },
 
   // Modal QR
   qrContainer: { flex: 1, backgroundColor: Colors.background, paddingTop: 16, paddingHorizontal: 16 },

@@ -2,8 +2,8 @@ import Colors from "@/constants/Colors";
 import { getCurrentUser } from "aws-amplify/auth"; // ✅ check auth
 import { generateClient } from "aws-amplify/data";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -112,7 +112,14 @@ type Suggestion = { id: string; label: string; coords?: { lat: number; lng: numb
 export default function NewParcel() {
   const router = useRouter();
   const client = generateClient<Schema>();
+  const { prefill } = useLocalSearchParams<{ prefill?: string | string[] }>();
 
+  // --- Mode création / édition
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [prefillConsumed, setPrefillConsumed] = useState(false); // ✅ on n’applique le prefill qu’une fois
+
+  // --- Form state
   const [type, setType] = useState("");
   const [poids, setPoids] = useState("");
   const [dimensions, setDimensions] = useState("");
@@ -140,6 +147,33 @@ export default function NewParcel() {
   const [estError, setEstError] = useState<string | null>(null);
   const [estDurationSec, setEstDurationSec] = useState<number | null>(null);
   const [estDistanceM, setEstDistanceM] = useState<number | null>(null);
+
+  // --- Hydratation depuis `prefill`
+  const prefillData = useMemo(() => {
+    if (!prefill) return null;
+    const raw = Array.isArray(prefill) ? prefill[0] : prefill;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, [prefill]);
+
+  // ✅ Appliquer le prefill une seule fois
+  useEffect(() => {
+    if (!prefillData || prefillConsumed) return;
+    if (typeof prefillData.id === "string" && prefillData.id.trim()) {
+      setIsEdit(true);
+      setEditId(prefillData.id);
+    }
+    if (typeof prefillData.type === "string") setType(prefillData.type);
+    if (typeof prefillData.description === "string") setDescription(prefillData.description);
+    if (prefillData.poids != null) setPoids(String(prefillData.poids));
+    if (typeof prefillData.dimensions === "string") setDimensions(prefillData.dimensions);
+    if (typeof prefillData.adresseDepart === "string") setAdresseDepart(prefillData.adresseDepart);
+    if (typeof prefillData.adresseArrivee === "string") setAdresseArrivee(prefillData.adresseArrivee);
+    setPrefillConsumed(true);
+  }, [prefillData, prefillConsumed]);
 
   // 🔎 debounce pour départ
   useEffect(() => {
@@ -246,12 +280,31 @@ export default function NewParcel() {
     }
   };
 
+  // ✅ réinitialise le formulaire et sort du mode édition
+  const resetForm = () => {
+    setIsEdit(false);
+    setEditId(null);
+    setPrefillConsumed(true); // bloque toute ré-application accidentelle tant que la page est montée
+    setType("");
+    setPoids("");
+    setDimensions("");
+    setDescription("");
+    setAdresseDepart("");
+    setAdresseArrivee("");
+    setPreset(null);
+    setShowTypeList(false);
+  };
+
+  // ✅ bouton "Nouveau colis" — enlève le param `prefill` de l'URL
+  const handleNewParcel = () => {
+    resetForm();
+    // remplace la route courante sans le paramètre `prefill`
+    // (adapter le chemin si ton group path diffère)
+    router.replace("/home");
+  };
+
   const handleSubmit = async () => {
     // ✅ Garde-fous UI
-    if (!preset) {
-      setError("Choisis d’abord un type bpost.");
-      return;
-    }
     if (!type) {
       setError("Sélectionne d'abord un type (liste déroulante).");
       return;
@@ -276,7 +329,7 @@ export default function NewParcel() {
       // ✅ Vérifie si utilisateur connecté
       const user = await getCurrentUser().catch(() => null);
       if (!user) {
-        notify("Non connecté", "Tu dois être connecté pour créer un colis. Connecte-toi avant de continuer.");
+        notify("Non connecté", "Tu dois être connecté pour continuer.");
         return;
       }
       const ownerId =
@@ -286,44 +339,64 @@ export default function NewParcel() {
 
       const now = new Date().toISOString();
 
-      // ✅ IMPORTANT : ne jamais envoyer undefined/null pour les String! (mettre "" si vide)
-      const res = await client.models.Parcel.create(
+      if (isEdit && editId) {
+        // 🔁 UPDATE
+        const res = await client.models.Parcel.update(
+          {
+            id: editId,
+            type: (type ?? "").trim(),
+            poids: Number.isFinite(poidsNum as number) ? (poidsNum as number) : undefined,
+            dimensions: (dimensions ?? "").trim(),
+            description: (description ?? "").trim(),
+            adresseDepart: (adresseDepart ?? "").trim(),
+            adresseArrivee: (adresseArrivee ?? "").trim(),
+            // On ne touche pas au statut si non requis
+            updatedAt: now,
+          } as any,
+          { authMode: "userPool" }
+        );
+
+        const updatedId = (res as any)?.data?.id ?? editId;
+
+        // Navigation post-update (résumé)
+        router.replace({
+          pathname: "/(receiver)/summary",
+          params: { id: updatedId, updated: "1" },
+        });
+        return;
+      }
+
+      // ➕ CREATE (comportement existant)
+      const createRes = await client.models.Parcel.create(
         {
-          type: (type ?? "").trim(),                         // String!
+          type: (type ?? "").trim(),
           poids: Number.isFinite(poidsNum as number) ? (poidsNum as number) : undefined,
-          dimensions: (dimensions ?? "").trim(),             // String! -> "" si vide
-          description: (description ?? "").trim(),           // String! -> "" si vide
-          adresseDepart: (adresseDepart ?? "").trim(),       // String!
-          adresseArrivee: (adresseArrivee ?? "").trim(),     // String!
-          status: "AVAILABLE",                               // Enum
-          owner: ownerId,                                    // 🔑 requis si schema: String!
-          receiverId: ownerId,                               // 🔑 si schema: String! (sinon inoffensif)
+          dimensions: (dimensions ?? "").trim(),
+          description: (description ?? "").trim(),
+          adresseDepart: (adresseDepart ?? "").trim(),
+          adresseArrivee: (adresseArrivee ?? "").trim(),
+          status: "AVAILABLE",
+          owner: ownerId,
+          receiverId: ownerId,
           createdAt: now,
           updatedAt: now,
         } as any,
         { authMode: "userPool" }
       );
 
-      const createdId = (res as any)?.data?.id ?? "";
+      const createdId = (createRes as any)?.data?.id ?? "";
 
-      // reset formulaire
-      setType("");
-      setPoids("");
-      setDimensions("");
-      setDescription("");
-      setAdresseDepart("");
-      setAdresseArrivee("");
-      setPreset(null);
-      setShowTypeList(false);
+      // reset formulaire (création seulement)
+      resetForm();
 
-      // navigation vers le résumé (DB mode par id)
+      // navigation vers le résumé
       router.replace({
         pathname: "/(receiver)/summary",
         params: { id: createdId },
       });
     } catch (e: any) {
-      console.log("create Parcel error →", e);
-      setError(e?.message ?? "Erreur lors de la création du colis");
+      console.log(isEdit ? "update Parcel error →" : "create Parcel error →", e);
+      setError(e?.message ?? (isEdit ? "Erreur lors de la mise à jour du colis" : "Erreur lors de la création du colis"));
     } finally {
       setLoading(false);
     }
@@ -359,7 +432,12 @@ export default function NewParcel() {
     <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 80 }]} keyboardShouldPersistTaps="handled">
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Text style={styles.title}>Nouveau colis</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{isEdit ? "Modifier le colis" : "Nouveau colis"}</Text>
+        <TouchableOpacity style={styles.newButton} onPress={handleNewParcel}>
+          <Text style={styles.newButtonText}>🆕 Nouveau colis</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Champ Type (liste déroulante intégrée) */}
       <Text style={styles.label}>Type bpost</Text>
@@ -523,7 +601,9 @@ export default function NewParcel() {
       </View>
 
       <TouchableOpacity style={[styles.button, loading && { opacity: 0.6 }]} onPress={handleSubmit} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Création…" : "Valider"}</Text>
+        <Text style={styles.buttonText}>
+          {loading ? (isEdit ? "Mise à jour…" : "Création…") : (isEdit ? "Mettre à jour" : "Valider")}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -531,7 +611,27 @@ export default function NewParcel() {
 
 const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: Colors.background, flexGrow: 1 },
-  title: { fontSize: 22, marginBottom: 16, textAlign: "center", color: Colors.text },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 8,
+  },
+
+  title: { fontSize: 22, textAlign: "left", color: Colors.text, flex: 1 },
+
+  newButton: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newButtonText: { color: Colors.textOnCard, fontWeight: "700" },
 
   label: { color: Colors.text, marginBottom: 6, marginTop: 10, fontWeight: "600" },
 
