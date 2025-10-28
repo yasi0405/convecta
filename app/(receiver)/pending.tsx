@@ -6,6 +6,7 @@ import {
   Dimensions,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -22,7 +23,9 @@ import QRCode from "react-native-qrcode-svg";
 
 // 🧭 Navigation (adapter la route si besoin)
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+
+// 🛟 Safe area (on applique les insets manuellement dans la modale)
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ⚙️ Typage souple (on ajoute owner + assignedTo + status)
 type ParcelWithAssign = Parcel & {
@@ -53,6 +56,7 @@ const QR_SIZE = Math.min(360, Math.round(qrBaseWidth * 0.8));
 
 export default function ParcelList() {
   const router = useRouter();
+  const insets = useSafeAreaInsets(); // ← on récupère les insets (top/bottom/left/right)
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -363,15 +367,25 @@ export default function ParcelList() {
         </>
       )}
 
-      {/* 🖼️ Modal plein écran avec le QR */}
+      {/* 🖼️ Modal plein écran avec le QR (safe area appliquée manuellement) */}
       <Modal
         animationType="slide"
         visible={qrVisible}
         onRequestClose={() => setQrVisible(false)}
         presentationStyle="fullScreen"
-        statusBarTranslucent
+        statusBarTranslucent={Platform.OS === "android"}
       >
-        <SafeAreaView style={styles.modalSafe} edges={["top"]}>
+        <View
+          style={[
+            styles.modalSafe,
+            {
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
+            },
+          ]}
+        >
           <View style={styles.modalInner}>
             <View style={styles.qrHeader}>
               <Text style={styles.qrTitle}>QR de validation de réception</Text>
@@ -386,7 +400,6 @@ export default function ParcelList() {
               ) : qrValue ? (
                 <>
                   <View style={styles.qrBox}>
-                    {/* ❗️Taille sûre pour iOS/Android via Dimensions */}
                     <QRCode value={qrValue} size={QR_SIZE} />
                   </View>
                   <Text style={styles.qrHint}>
@@ -401,7 +414,7 @@ export default function ParcelList() {
               )}
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
     </View>
   );

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -16,7 +17,8 @@ import {
 
 // 🔄 expo-camera (remplace expo-barcode-scanner déprécié)
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { SafeAreaView } from "react-native-safe-area-context";
+// 🛟 on applique les insets nous-mêmes (plus fiable que SafeAreaView dans les modales full-screen iOS)
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type ParcelStatus =
   | "AVAILABLE"
@@ -38,6 +40,8 @@ type Parcel = Omit<ParcelCtx, "status"> & {
 const client = generateClient<any>();
 
 export default function CourierPendingList() {
+  const insets = useSafeAreaInsets();
+
   const { pendingParcels } = useParcelContext();
   const [userId, setUserId] = useState<string | null>(null);
   const [myParcels, setMyParcels] = useState<Parcel[]>([]);
@@ -373,15 +377,26 @@ export default function CourierPendingList() {
         </>
       )}
 
-      {/* Modal Scan Caméra */}
+      {/* Modal Scan Caméra (full-screen, safe area appliquée manuellement) */}
       <Modal
         animationType="slide"
         visible={scanVisible}
         onRequestClose={() => setScanVisible(false)}
         presentationStyle="fullScreen"
-        statusBarTranslucent
+        // utile sur Android pour que le contenu passe sous la status bar, puis on padd les insets :
+        statusBarTranslucent={Platform.OS === "android"}
       >
-        <SafeAreaView style={styles.modalSafe} edges={["top"]}>
+        <View
+          style={[
+            styles.modalSafe,
+            {
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
+            },
+          ]}
+        >
           <View style={styles.modalInner}>
             <View style={styles.scanHeader}>
               <Text style={styles.scanTitle}>Scanner le QR du client</Text>
@@ -406,7 +421,6 @@ export default function CourierPendingList() {
                     style={styles.cameraFill}
                     facing="back"
                     barcodeScannerSettings={{
-                      // scanne uniquement les QR pour éviter les bruits
                       barcodeTypes: ["qr"],
                     }}
                     onBarcodeScanned={
@@ -427,7 +441,7 @@ export default function CourierPendingList() {
               </>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
     </View>
   );
@@ -497,7 +511,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingBottom: 16,
-    // pas de paddingTop ici: il vient du SafeArea (edges=["top"])
+    // pas de paddingTop ici: on l'applique via insets.top
   },
 
   scanHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },

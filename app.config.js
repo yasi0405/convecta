@@ -3,7 +3,7 @@ export default ({ config }) => ({
   expo: {
     name: "convecta",
     slug: "convecta",
-    version: "1.0.15",
+    version: "1.0.16",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "convecta",
@@ -88,7 +88,7 @@ export default ({ config }) => ({
       },
     },
 
-    runtimeVersion: "1.0.15",
+    runtimeVersion: "1.0.16",
     updates: {
       url: "https://u.expo.dev/87d19859-6b3f-4665-99fc-e47ffcb8b914",
     },
