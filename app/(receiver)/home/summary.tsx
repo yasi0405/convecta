@@ -3,7 +3,40 @@ import { generateClient } from "aws-amplify/data";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import type { Schema } from "../../amplify/data/resource"; // ajuste le chemin si besoin
+import type { Schema } from "../../../amplify/data/resource"; // ajuste le chemin si besoin
+
+// —— Services (isolés) ——
+function getClient() {
+  // Lazy init du client pour éviter les warnings "Amplify has not been configured"
+  return generateClient<Schema>();
+}
+
+async function loadParcelById(id: string) {
+  const client = getClient();
+  // @ts-ignore
+  const res = await client.models.Parcel.get({ id } as any, { authMode: "userPool" });
+  return (res as any)?.data as Parcel | null;
+}
+
+async function createParcelFromData(data: Parcel) {
+  const client = getClient();
+  const now = new Date().toISOString();
+  // @ts-ignore
+  await client.models.Parcel.create(
+    {
+      type: data.type,
+      status: "AVAILABLE",
+      poids: (data.poids as number | undefined) ?? undefined,
+      dimensions: data.dimensions || undefined,
+      description: data.description || undefined,
+      adresseDepart: data.adresseDepart?.trim(),
+      adresseArrivee: data.adresseArrivee?.trim(),
+      createdAt: now,
+      updatedAt: now,
+    } as any,
+    { authMode: "userPool" }
+  );
+}
 
 type Parcel = {
   id?: string;
@@ -20,7 +53,6 @@ type Parcel = {
 
 export default function ParcelSummary() {
   const router = useRouter();
-  const client = generateClient<Schema>();
   const params = useLocalSearchParams();
 
   const [submitting, setSubmitting] = useState(false);
@@ -35,11 +67,7 @@ export default function ParcelSummary() {
     (async () => {
       try {
         setLoadingById(true);
-        const res = await client.models.Parcel.get(
-          { id } as any,
-          { authMode: "userPool" }
-        );
-        const row = (res as any)?.data as Parcel | null;
+        const row = await loadParcelById(id);
         setFromDb(row ?? null);
       } catch (e: any) {
         Alert.alert("Erreur", e?.message ?? "Impossible de charger le colis.");
@@ -89,24 +117,8 @@ export default function ParcelSummary() {
 
     try {
       setSubmitting(true);
-      const now = new Date().toISOString();
-
-      await client.models.Parcel.create(
-        {
-          type: data.type,
-          status: "AVAILABLE",
-          poids: (data.poids as number | undefined) ?? undefined,
-          dimensions: data.dimensions || undefined,
-          description: data.description || undefined,
-          adresseDepart: data.adresseDepart?.trim(),  // ✅
-          adresseArrivee: data.adresseArrivee?.trim(), // ✅
-          createdAt: now,
-          updatedAt: now,
-        } as any,
-        { authMode: "userPool" }
-      );
-
-      router.replace("/pending");
+      await createParcelFromData(data);
+      router.replace("/(receiver)/pending");
     } catch (e: any) {
       Alert.alert("Erreur", e?.message ?? "Échec de la création du colis.");
     } finally {

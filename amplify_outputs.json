@@ -45,13 +45,6 @@
               "isRequired": true,
               "attributes": []
             },
-            "type": {
-              "name": "type",
-              "isArray": false,
-              "type": "String",
-              "isRequired": true,
-              "attributes": []
-            },
             "poids": {
               "name": "poids",
               "isArray": false,

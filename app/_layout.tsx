@@ -26,7 +26,7 @@ function AppShell() {
   const isCourier = segments?.includes('(courier)');
 
   const switchLabel = isCourier ? 'Receveur' : 'Livreur';
-  const targetHref = isCourier ? '/(receiver)/home' : '/(courier)/navigate';
+  const targetHref = isCourier ? '/(receiver)/home' : '/(courier)/home';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

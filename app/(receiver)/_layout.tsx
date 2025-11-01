@@ -30,7 +30,7 @@ export default function ReceiverLayout() {
     >
       {/* 🏠 Accueil - Création de colis */}
       <Tabs.Screen
-        name="home"
+        name="home/index"
         options={{
           title: "Nouveau colis",
           tabBarIcon: ({ color }) => (
@@ -39,12 +39,14 @@ export default function ReceiverLayout() {
         }}
       />
 
-      {/* 📦 Résumé de création (onglet masqué) */}
+      {/* 📥 Colis à recevoir (liste de réception) */}
       <Tabs.Screen
-        name="summary"
+        name="incoming"
         options={{
-          title: "Résumé",
-          tabBarButton: () => null, // ← on masque l’onglet
+          title: "À recevoir",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="tray.and.arrow.down.fill" color={color} />
+          ),
         }}
       />
 
@@ -59,15 +61,10 @@ export default function ReceiverLayout() {
         }}
       />
 
-      {/* 👤 Profil utilisateur */}
+      {/* 🫥 Masquer la page Résumé de la TabBar */}
       <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profil",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={26} name="person.fill" color={color} />
-          ),
-        }}
+        name="home/summary"
+        options={{ href: null }}
       />
     </Tabs>
   );
