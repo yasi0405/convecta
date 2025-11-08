@@ -1,9 +1,14 @@
-export default ({ config }) => ({
+// app.config.js — CommonJS + .env
+const dotenv = require("dotenv");
+dotenv.config();
+
+/** @type {import('@expo/config').ExpoConfig} */
+module.exports = ({ config }) => ({
   ...config,
   expo: {
     name: "convecta",
     slug: "convecta",
-    version: "1.0.16",
+    version: "1.0.17",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "convecta",
@@ -16,9 +21,11 @@ export default ({ config }) => ({
       buildNumber: "4",
       infoPlist: {
         NSCameraUsageDescription:
-          "La caméra est utilisée pour scanner les QR codes de livraison.",
+          "La caméra est utilisée pour scanner les QR codes et les cartes d'identité.",
         NSLocationWhenInUseUsageDescription:
           "Nous utilisons votre position pour centrer la carte et proposer des livraisons à proximité.",
+        NSPhotoLibraryAddUsageDescription:
+          "Enregistrer les images scannées pour vérification KYC.",
       },
     },
 
@@ -28,10 +35,8 @@ export default ({ config }) => ({
         backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
-      // ✅ Permissions nettoyées : ajoute CAMERA, supprime les doublons
       permissions: [
         "android.permission.CAMERA",
-        // garde ces deux permissions audio seulement si ton app en a besoin
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
       ],
@@ -46,8 +51,6 @@ export default ({ config }) => ({
 
     plugins: [
       "expo-router",
-
-      // Splash screen
       [
         "expo-splash-screen",
         {
@@ -57,21 +60,11 @@ export default ({ config }) => ({
           backgroundColor: "#ffffff",
         },
       ],
-
-      // ✅ Utilitaires Expo
-      "expo-audio",
-      "expo-location",
-      "expo-asset",
-
-      // ✅ Caméra (remplace l’ancien expo-barcode-scanner)
       ["expo-camera"],
-
-      // ✅ Mapbox avec la nouvelle variable d'env
       [
         "@rnmapbox/maps",
         {
           RNMapboxMapsImpl: "mapbox",
-          // Remplace l'ancienne MAPBOX_DOWNLOADS_TOKEN dépréciée
           RNMapboxMapsDownloadToken: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN,
         },
       ],
@@ -86,9 +79,10 @@ export default ({ config }) => ({
       eas: {
         projectId: "87d19859-6b3f-4665-99fc-e47ffcb8b914",
       },
+      EXPO_PUBLIC_MAPBOX_TOKEN: process.env.EXPO_PUBLIC_MAPBOX_TOKEN || "",
     },
 
-    runtimeVersion: "1.0.16",
+    runtimeVersion: "1.0.17",
     updates: {
       url: "https://u.expo.dev/87d19859-6b3f-4665-99fc-e47ffcb8b914",
     },
