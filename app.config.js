@@ -19,6 +19,7 @@ module.exports = ({ config }) => ({
       supportsTablet: true,
       bundleIdentifier: "com.yasi82.convecta",
       buildNumber: "4",
+      deploymentTarget: "13.4",
       infoPlist: {
         NSCameraUsageDescription:
           "La caméra est utilisée pour scanner les QR codes et les cartes d'identité.",
