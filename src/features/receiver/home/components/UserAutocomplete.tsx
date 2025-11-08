@@ -1,7 +1,7 @@
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
 import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useUserSearch } from "../_hooks/useUserSearch";
+import { useUserSearch } from "../hooks/useUserSearch";
 import type { RecipientUser } from "../types";
 
 export function UserAutocomplete({

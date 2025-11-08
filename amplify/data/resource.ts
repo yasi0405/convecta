@@ -22,6 +22,10 @@ const ParcelStatus = a.enum([
 
 const ScanPurpose = a.enum(["PICKUP", "DELIVERY"]);
 
+const KycStatus = a.enum(["none", "pending", "verified", "rejected"]);
+const KycProvider = a.enum(["manual", "stripe", "onfido"]);
+const KycRequestStatus = a.enum(["pending", "verified", "rejected"]);
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /* Custom Types                                                              */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -47,7 +51,7 @@ const VerifyScanResult = a.customType({
 const Parcel = a
   .model({
     // Métier
-    type: a.string().required(),
+    type: a.string(),
     poids: a.float(),
     dimensions: a.string(),
     description: a.string(),
@@ -100,15 +104,54 @@ export const scanFn = defineFunction({
 });
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/* Models additionnels : User / KYC                                          */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const UserProfile = a
+  .model({
+    sub: a.string().required(),           // Cognito sub
+    email: a.email().required(),
+    first_name: a.string(),
+    last_name: a.string(),
+    address: a.string(),
+    kyc_status: a.ref("KycStatus").required(), // default handled at create
+    createdAt: a.datetime().required(),
+    updatedAt: a.datetime().required(),
+  })
+  .authorization((allow) => [allow.owner()])
+  .identifier(["sub"]);
+
+const KycRequest = a
+  .model({
+    sub: a.string().required(),
+    id_front_url: a.string().required(),
+    id_back_url: a.string(),
+    provider: a.ref("KycProvider").required(), // default handled at create
+    status: a.ref("KycRequestStatus").required(), // default handled at create
+    reason: a.string(),
+    ocr_payload: a.json(),
+    mrz: a.string(),
+    createdAt: a.datetime().required(),
+    updatedAt: a.datetime().required(),
+  })
+  .authorization((allow) => [allow.owner()])
+  .secondaryIndexes((idx) => [idx("sub")]);
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /* Schéma principal                                                          */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const schema = a.schema({
   ParcelStatus,
   ScanPurpose,
+  KycStatus,
+  KycProvider,
+  KycRequestStatus,
   Parcel,
   GenerateScanCodeResult,
   VerifyScanResult,
+  UserProfile,
+  KycRequest,
 
   // Génération d'un QR signé (affiché côté émetteur/récepteur)
   generateScanCode: a
@@ -118,7 +161,7 @@ const schema = a.schema({
       purpose: a.ref("ScanPurpose").required(),
     })
     .returns(GenerateScanCodeResult)
-    .handler(a.handler.function(scanFn)) // ✅ référence correcte à la Lambda
+    .handler(a.handler.function(scanFn)) 
     .authorization((allow) => [allow.authenticated()]),
 
   // Vérification d'un QR (scan côté livreur)

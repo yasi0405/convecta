@@ -1,4 +1,4 @@
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import * as Location from "expo-location";

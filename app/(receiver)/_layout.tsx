@@ -1,10 +1,9 @@
-import { Tabs } from "expo-router";
-import React from "react";
-
-import { HapticTab } from "@/components/HapticTab";
+import { HapticTab } from "@/components/ui/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import TabBarBackground from "@/components/ui/TabBarBackground";
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
+import { Tabs } from "expo-router";
+import React from "react";
 
 export default function ReceiverLayout() {
   return (
@@ -41,7 +40,7 @@ export default function ReceiverLayout() {
 
       {/* 📥 Colis à recevoir (liste de réception) */}
       <Tabs.Screen
-        name="incoming"
+        name="incoming/index"
         options={{
           title: "À recevoir",
           tabBarIcon: ({ color }) => (

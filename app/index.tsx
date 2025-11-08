@@ -1,24 +1,22 @@
-import Colors from "@/constants/Colors";
-import { useAuthenticator } from "@aws-amplify/ui-react-native";
+import { useProfileGate } from "@/features/user/useProfileGate";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
+import Colors from "@/theme/Colors";
 import { Asset } from "expo-asset";
 import * as Location from "expo-location";
+import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { SvgUri } from "react-native-svg";
 
-export const unstable_settings = {
-  initialRouteName: "index",
-};
-
-export const screenOptions = {
-  tabBarStyle: { display: "none" },
-};
+ensureAmplifyConfigured();
 
 export default function Dashboard() {
   const router = useRouter();
-  const { user } = useAuthenticator();
+  const gate = useProfileGate();
+  const canProceed = gate === "ok";
 
+  // --- UI principale ---
   const [center, setCenter] = useState<[number, number]>([4.3517, 50.8503]); // [lng, lat] Bruxelles par défaut
   const [zoom, setZoom] = useState(12);
   const [mode, setMode] = useState<"courier" | "receiver">("receiver");
@@ -28,7 +26,7 @@ export default function Dashboard() {
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return; // garde le fallback Bruxelles
+        if (status !== "granted") return; // garde le fallback Bruxelles
         const pos = await Location.getCurrentPositionAsync({});
         const lng = pos.coords.longitude;
         const lat = pos.coords.latitude;
@@ -37,44 +35,57 @@ export default function Dashboard() {
           setZoom(12);
         }
       } catch (e) {
-        // ignore: fallback to Bruxelles
+        // ignore: fallback Bruxelles
       }
     })();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // Redirection onboarding forcée tant que le user n'est pas complet
+  useEffect(() => {
+    if (gate !== "ok") {
+      router.replace("/home/onboarding" as Href);
+    }
+  }, [gate]);
+
+  if (gate === "loading") return null; 
 
   const logoUri = Asset.fromModule(require("../assets/images/logo.svg")).uri;
 
   return (
     <View style={styles.container}>
-      <SvgUri
-        uri={logoUri}
-        width={200}
-        height={200}
-        style={styles.logo}
-      />
+      <SvgUri uri={logoUri} width={200} height={200} style={styles.logo} />
       <View style={styles.mapContainer}>
         <Image
-          source={{ uri: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center[0]},${center[1]},${zoom},0/800x600?access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}` }}
+          source={{
+            uri: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${center[0]},${center[1]},${zoom},0/800x600?access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}`,
+          }}
           accessible
           accessibilityLabel="Carte de la ville"
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: "100%", height: "100%" }}
           resizeMode="cover"
         />
         <View style={styles.modeCard}>
           <View style={styles.switchRow}>
-            <Text style={styles.modeText}>Récepteur</Text>
+            <Text style={[styles.modeText, styles.switchItem]}>Récepteur</Text>
             <Switch
+              style={styles.switchItem}
               value={mode === "courier"}
               onValueChange={(val) => setMode(val ? "courier" : "receiver")}
             />
-            <Text style={styles.modeText}>Livreur</Text>
+            <Text style={[styles.modeText, styles.switchItem]}>Livreur</Text>
           </View>
           <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={() => router.replace(mode === 'courier' ? '/(courier)/home' : '/(receiver)/home')}
+            style={[styles.confirmButton, !canProceed ? { opacity: 0.5 } : null]}
+            disabled={!canProceed}
+            onPress={() =>
+              router.replace((mode === "courier" ? "/(courier)/home" : "/(receiver)/home") as Href)
+            }
+            accessibilityLabel={canProceed ? "Continuer" : "Profil incomplet, ouvrir l'onboarding"}
           >
-            <Text style={styles.confirmButtonText}>Confirmer</Text>
+            <Text style={styles.confirmButtonText}>{canProceed ? "Confirmer" : "Complète ton profil"}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -92,24 +103,6 @@ const styles = StyleSheet.create({
     height: 40,
     alignSelf: "center",
   },
-  title: {
-    fontSize: 24,
-    textAlign: "center",
-    marginBottom: 20,
-    color: Colors.text,
-  },
-  button: {
-    backgroundColor: Colors.button,
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: Colors.buttonText,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
   mapContainer: {
     flex: 1,
     borderRadius: 12,
@@ -117,24 +110,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  map: {
-    flex: 1,
-  },
-  pin: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.accent, // green pin matching your theme
-    borderWidth: 2,
-    borderColor: Colors.card,
-  },
   modeCard: {
-    position: 'absolute',
-    top: '50%',
-    alignSelf: 'center',
+    position: "absolute",
+    top: "50%",
+    alignSelf: "center",
     transform: [{ translateY: -50 }],
-    flexDirection: 'column',
-    alignItems: 'center',
+    flexDirection: "column",
+    alignItems: "center",
     backgroundColor: Colors.card,
     borderRadius: 12,
     padding: 12,
@@ -143,7 +125,7 @@ const styles = StyleSheet.create({
   modeText: {
     color: Colors.text,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   confirmButton: {
     marginTop: 10,
@@ -151,17 +133,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   confirmButtonText: {
     color: Colors.background,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 14,
   },
   switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  switchItem: {
+    marginHorizontal: 6,
   },
 });

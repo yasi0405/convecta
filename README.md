@@ -1,94 +1,156 @@
-# Welcome to your Expo app 👋
+# Convecta Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Convecta is the Expo + React Native mobile app that powers the Receiver and Courier journeys for parcel management (tracking, intake, slots, QR confirmations, and more). This repo hosts the frontend app, Amplify orchestration, and the scripts required for day-to-day deliveries as well as EAS builds.
 
-## Get started
+## Table of Contents
 
-1. Install dependencies
+1. [Stack & Architecture](#stack--architecture)
+2. [Prerequisites](#prerequisites)
+3. [Installation](#installation)
+4. [Running the Environments](#running-the-environments)
+5. [Useful npm Scripts](#useful-npm-scripts)
+6. [Project Structure](#project-structure)
+7. [Build & Release](#build--release)
+8. [iOS Troubleshooting](#ios-troubleshooting)
+9. [Resources](#resources)
 
-   ```bash
-   npm install expo
-   npx expo install
-   ```
+## Stack & Architecture
 
-2. Start the app
+- **Frontend**: Expo Router + React Native 0.79, TypeScript 5.8, layout-based navigation (see `app/(receiver)` and `app/(courier)`).
+- **Backend**: AWS Amplify (declarative modules under `amplify/` and `amplify/data/`), synced through `ampx sandbox`.
+- **Maps & Geolocation**: Mapbox (`@rnmapbox/maps`, `@mapbox/mapbox-gl-geocoder`) for address autocomplete and map rendering.
+- **EAS**: OTA updates (`eas update`) and store builds (`eas build`, `eas submit`).
 
-   ```bash
-   npx expo start
-   ```
+## Prerequisites
 
-3. Run API
+- Node.js 18+ (ideally via `nvm`), npm 10+.
+- Expo CLI (`npx expo`) and EAS CLI (`npm i -g eas-cli` if needed).
+- Xcode + Cocoapods (for iOS) / Android Studio (for Android).
+- AWS access (Amplify profiles & permissions). Configure your credentials (`aws configure sso` or `aws configure`) before launching the backend.
 
-   ```bash
-   npx ampx sandbox
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Installation
 
 ```bash
-npm run reset-project
+git clone <repo>
+cd convecta
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+When upgrading native modules or switching machines, plan for a full cleanup (see [iOS Troubleshooting](#ios-troubleshooting)).
 
-## Learn more
+## Running the Environments
 
-To learn more about developing your project with Expo, look at the following resources:
+### 1. Amplify backend (local sandbox)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx ampx sandbox          # or: sudo npx @aws-amplify/backend-cli sandbox
+```
 
-## Join the community
+This spins up or refreshes isolated backend resources. The first run will prompt you for the region and AWS profile. Keep the process running during development.
 
-Join our community of developers creating universal apps.
+### 2. Expo app (dev client, simulators, Expo Go)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start            # Metro dashboard + QR code
+npx expo run:ios          # local iOS build (avoid sudo)
+npx expo run:android      # local Android build
+```
 
+- From Metro, pick the desired target (Expo Go, iOS simulator, Android emulator, development build).
+- Key entry points: `app/(receiver)/home/index.tsx`, `app/(courier)/home.tsx`, and hooks under `src/features/**`.
 
-## Issues during build
-# 1) from project root
-cd /Users/simonyannick/Apps/mobile/convecta
+## Useful npm Scripts
 
-# 2) fix ownership (sudo just for chown, not for pod/npm/expo)
-sudo chown -R "$(whoami)" .
-sudo chown -R "$(whoami)" ~/.cocoapods ~/Library/Caches/CocoaPods 2>/dev/null || true
+| Script | Description |
+| ------ | ----------- |
+| `npm start` | Starts Metro + Expo Router. |
+| `npm run ios` / `npm run android` | Native builds via Expo Run. |
+| `npm run web` | Expo in web mode (handy for quick checks). |
+| `npm run lint` | Expo/ESLint linting. |
+| `npm run build:prod` | `expo prebuild` + `eas update --branch main`. |
+| `npm run reset-project` | Replaces the app with a blank skeleton (use carefully). |
 
-# 3) clean & reinstall JS deps (also fixes earlier npm lock mismatch)
-rm -rf node_modules package-lock.json
-npm install
+## Project Structure
 
-# 4) clean iOS pods and reinstall
-cd ios
-rm -rf Pods Podfile.lock
-pod repo update
-pod install --repo-update
-cd ..
+```
+app/                     # Expo Router navigation (receiver/courier layouts, onboarding, etc.)
+src/features/receiver    # Receiver journey (home, pending, incoming, hooks, services)
+src/features/courier     # Courier journey (home, pending, summary)
+src/lib/amplify.ts       # Client-side Amplify initialization
+amplify/                 # Infra & data (GraphQL, auth, storage)
+assets/                  # Fonts, images, splash art
+scripts/                 # Automations (reset-project, netrc, etc.)
+```
 
-# 5) (optional) re-sync native config if needed
-npx expo prebuild --platform ios
+> Tip: shared constants live in `src/constants/index.ts`, and API calls live in `src/features/**/services`.
 
-# 6) run on iOS – NO sudo
-npx expo run:ios        # or: npx expo run:ios --device
+## Build & Release
 
+1. **OTA update** (main branch):
 
-## Publish app
+   ```bash
+   eas update --branch main
+   ```
 
-eas update --branch main
-eas build --platform ios
-eas submit
+2. **Store builds**:
 
+   ```bash
+   eas build --platform ios
+   eas build --platform android
+   ```
 
-## Backend Amplify
-push back : sudo npx @aws-amplify/backend-cli sandbox
+3. **Submission**:
+
+   ```bash
+   eas submit --platform ios --path <.ipa>
+   eas submit --platform android --path <.aab>
+   ```
+
+Make sure the targeted backend (sandbox vs prod) matches the EAS environment. Check `app.config.js` and the `EXPO_PUBLIC_*` variables whenever you add new secrets.
+
+## iOS Troubleshooting
+
+1. From the project root:
+
+   ```bash
+   sudo chown -R "$(whoami)" .
+   sudo chown -R "$(whoami)" ~/.cocoapods ~/Library/Caches/CocoaPods 2>/dev/null || true
+   ```
+
+2. Reinstall JavaScript dependencies:
+
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+3. Clean Pods:
+
+   ```bash
+   cd ios
+   rm -rf Pods Podfile.lock
+   pod repo update
+   pod install --repo-update
+   cd ..
+   ```
+
+4. (Optional) Resync native config:
+
+   ```bash
+   npx expo prebuild --platform ios
+   ```
+
+5. Relaunch:
+
+   ```bash
+   npx expo run:ios       # --device for a physical device
+   ```
+
+## Resources
+
+- [Expo documentation](https://docs.expo.dev/)
+- [Expo Router](https://docs.expo.dev/router/introduction/)
+- [AWS Amplify (React Native)](https://docs.amplify.aws/react-native/start/)
+- [EAS Update & Build](https://docs.expo.dev/eas/)
+
+For product or infrastructure questions, open a Notion/Jira ticket and specify the context (Receiver/Courier, sandbox vs prod backend, Amplify logs).

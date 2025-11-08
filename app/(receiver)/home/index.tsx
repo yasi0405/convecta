@@ -1,17 +1,17 @@
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-import { AddressField } from "./_components/AddressField";
-import { EstimateCard } from "./_components/EstimateCard";
-import { UserAutocomplete } from "./_components/UserAutocomplete";
+import { AddressField } from "@features/receiver/home/components/AddressField";
+import { EstimateCard } from "@features/receiver/home/components/EstimateCard";
+import { UserAutocomplete } from "@features/receiver/home/components/UserAutocomplete";
 
-import { useAddressAutocomplete } from "./_hooks/useAddressAutocomplete";
-import { useEstimate } from "./_hooks/useEstimate";
-import { createParcel, updateParcel } from "./_services/parcel";
+import { useAddressAutocomplete } from "@features/receiver/home/hooks/useAddressAutocomplete";
+import { useEstimate } from "@features/receiver/home/hooks/useEstimate";
+import { createParcel, updateParcel } from "@features/receiver/home/services/parcel";
 
-import type { RecipientMode, RecipientUser } from "./types";
+import type { RecipientMode, RecipientUser } from "@features/receiver/home/types";
 
 const notify = (title: string, msg: string) =>
   Platform.OS === "web" ? window.alert(`${title}\n\n${msg}`) : Alert.alert(title, msg);

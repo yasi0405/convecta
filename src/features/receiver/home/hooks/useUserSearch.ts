@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { listAllUsers, searchUsers } from "../_services/users";
+import { listAllUsers, searchUsers } from "../services/users";
 import type { RecipientUser } from "../types";
 
 export function useUserSearch() {

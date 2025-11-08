@@ -1,6 +1,6 @@
 // theme/ThemeProvider.tsx
 import React, { ReactNode, createContext, useContext } from 'react';
-import Colors from '../constants/Colors';
+import Colors from './Colors';
 
 const ThemeContext = createContext(Colors);
 

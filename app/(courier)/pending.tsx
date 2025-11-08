@@ -1,5 +1,5 @@
-import Colors from "@/constants/Colors";
-import { Parcel as ParcelCtx, useParcelContext } from "@/src/context/ParcelContext";
+import { Parcel as ParcelCtx, useParcelContext } from "@/context/ParcelContext";
+import Colors from "@/theme/Colors";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import React, { useCallback, useEffect, useMemo, useState } from "react";

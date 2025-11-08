@@ -1,4 +1,4 @@
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
 import React from "react";
 import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import type { Suggestion } from "../types";

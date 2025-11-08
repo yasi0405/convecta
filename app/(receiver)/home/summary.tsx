@@ -1,9 +1,9 @@
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
+import type { Schema } from "@amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import type { Schema } from "../../../amplify/data/resource"; // ajuste le chemin si besoin
 
 // —— Services (isolés) ——
 function getClient() {

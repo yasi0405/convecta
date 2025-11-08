@@ -4,11 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { ParcelProvider } from '@/src/context/ParcelContext';
+import { ParcelProvider } from '@/context/ParcelContext';
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
 
-import Colors from "@/constants/Colors";
+import Colors from "@/theme/Colors";
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import outputs from "../amplify_outputs.json";
