@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+RESULT=$(npm run --silent version:bump -- --for-hook --amend)
+
+case "$RESULT" in
+  "SKIP "*)
+    echo "Version déjà incrémentée pour ce commit (${RESULT#SKIP })."
+    exit 0
+    ;;
+  "BUMPED "*)
+    NEXT=${RESULT#BUMPED }
+    echo "Version automatiquement incrémentée à ${NEXT}."
+    echo "Le commit a été amendé avec la nouvelle version. Relance 'git push' pour l'envoyer."
+    exit 1
+    ;;
+  *)
+    echo "$RESULT"
+    exit 0
+    ;;
+esac

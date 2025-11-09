@@ -24,24 +24,27 @@ function AppShell() {
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
+  const hideTopBar = pathname?.startsWith("/home/onboarding");
 
   const switchLabel = isCourier ? 'Receveur' : 'Livreur';
   const targetHref = isCourier ? '/(receiver)/home' : '/(courier)/home';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topBar}>
-        {/* ✅ Navigation déclarative via Link pour garantir le switch */}
-        <Link href={targetHref} asChild>
-          <TouchableOpacity style={styles.switchButton}>
-            <Text style={styles.switchButtonText}>↔ {switchLabel}</Text>
-          </TouchableOpacity>
-        </Link>
+      {!hideTopBar && (
+        <View style={styles.topBar}>
+          {/* ✅ Navigation déclarative via Link pour garantir le switch */}
+          <Link href={targetHref} asChild>
+            <TouchableOpacity style={styles.switchButton}>
+              <Text style={styles.switchButtonText}>↔ {switchLabel}</Text>
+            </TouchableOpacity>
+          </Link>
 
-        <TouchableOpacity style={styles.button} onPress={signOut}>
-          <Text style={styles.buttonText}>Déconnexion</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.button} onPress={signOut}>
+            <Text style={styles.buttonText}>Déconnexion</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Stack
         screenOptions={{

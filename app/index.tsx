@@ -45,7 +45,7 @@ export default function Dashboard() {
 
   // Redirection onboarding forcée tant que le user n'est pas complet
   useEffect(() => {
-    if (gate !== "ok") {
+    if (gate === "needsOnboarding") {
       router.replace("/home/onboarding" as Href);
     }
   }, [gate]);

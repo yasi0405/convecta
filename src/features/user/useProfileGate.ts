@@ -9,7 +9,7 @@ export function useProfileGate() {
       try {
         const me = await getOrCreateProfile();
         const hasCore = Boolean(me.first_name && me.last_name && me.address);
-        const kycOk = me.kyc_status === "verified";
+        const kycOk = me.kyc_status === "verified" || me.kyc_status === "registered";
         setState(hasCore && kycOk ? "ok" : "needsOnboarding");
       } catch {
         setState("needsOnboarding");

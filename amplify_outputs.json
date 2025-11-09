@@ -283,6 +283,41 @@
               "isRequired": false,
               "attributes": []
             },
+            "birthdate": {
+              "name": "birthdate",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "national_registry_number": {
+              "name": "national_registry_number",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "addresses": {
+              "name": "addresses",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": false,
+              "attributes": []
+            },
+            "contacts": {
+              "name": "contacts",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": false,
+              "attributes": []
+            },
+            "kyc_document_front_url": {
+              "name": "kyc_document_front_url",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
             "kyc_status": {
               "name": "kyc_status",
               "isArray": false,
@@ -500,6 +535,7 @@
           "name": "KycStatus",
           "values": [
             "none",
+            "registered",
             "pending",
             "verified",
             "rejected"
@@ -717,6 +753,26 @@
         }
       }
     }
+  },
+  "storage": {
+    "aws_region": "us-east-1",
+    "bucket_name": "amplify-convecta-root-san-convectauploadsbucket792-7ed2bwy4e7sq",
+    "buckets": [
+      {
+        "name": "convectaUploads",
+        "bucket_name": "amplify-convecta-root-san-convectauploadsbucket792-7ed2bwy4e7sq",
+        "aws_region": "us-east-1",
+        "paths": {
+          "kyc/${cognito-identity.amazonaws.com:sub}/*": {
+            "entityidentity": [
+              "get",
+              "list",
+              "write"
+            ]
+          }
+        }
+      }
+    ]
   },
   "version": "1.4"
 }

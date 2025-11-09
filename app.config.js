@@ -19,7 +19,7 @@ module.exports = ({ config }) => ({
       supportsTablet: true,
       bundleIdentifier: "com.yasi82.convecta",
       buildNumber: "5",
-      deploymentTarget: "15.0",
+      deploymentTarget: "16.0",
       infoPlist: {
         NSCameraUsageDescription:
           "La caméra est utilisée pour scanner les QR codes et les cartes d'identité.",
@@ -27,6 +27,7 @@ module.exports = ({ config }) => ({
           "Nous utilisons votre position pour centrer la carte et proposer des livraisons à proximité.",
         NSPhotoLibraryAddUsageDescription:
           "Enregistrer les images scannées pour vérification KYC.",
+        LSApplicationQueriesSchemes: ["whatsapp", "whatsapp-business"],
       },
     },
 

@@ -22,7 +22,7 @@ const ParcelStatus = a.enum([
 
 const ScanPurpose = a.enum(["PICKUP", "DELIVERY"]);
 
-const KycStatus = a.enum(["none", "pending", "verified", "rejected"]);
+const KycStatus = a.enum(["none", "registered", "pending", "verified", "rejected"]);
 const KycProvider = a.enum(["manual", "stripe", "onfido"]);
 const KycRequestStatus = a.enum(["pending", "verified", "rejected"]);
 
@@ -114,6 +114,11 @@ const UserProfile = a
     first_name: a.string(),
     last_name: a.string(),
     address: a.string(),
+    birthdate: a.string(),
+    national_registry_number: a.string(),
+    addresses: a.json(), // tableau d'adresses structurées
+    contacts: a.json(), // personnes de contact
+    kyc_document_front_url: a.string(),
     kyc_status: a.ref("KycStatus").required(), // default handled at create
     createdAt: a.datetime().required(),
     updatedAt: a.datetime().required(),
