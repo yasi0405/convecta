@@ -81,7 +81,7 @@ export default function Dashboard() {
             style={[styles.confirmButton, !canProceed ? { opacity: 0.5 } : null]}
             disabled={!canProceed}
             onPress={() =>
-              router.replace((mode === "courier" ? "/(courier)/home" : "/(receiver)/home") as Href)
+              router.replace((mode === "courier" ? "/(courier)/navigate" : "/(receiver)/home") as Href)
             }
             accessibilityLabel={canProceed ? "Continuer" : "Profil incomplet, ouvrir l'onboarding"}
           >

@@ -57,7 +57,7 @@ npx expo run:android      # local Android build
 ```
 
 - From Metro, pick the desired target (Expo Go, iOS simulator, Android emulator, development build).
-- Key entry points: `app/(receiver)/home/index.tsx`, `app/(courier)/home.tsx`, and hooks under `src/features/**`.
+- Key entry points: `app/(receiver)/home/index.tsx`, `app/(courier)/navigate.tsx`, and hooks under `src/features/**`.
 
 ## Useful npm Scripts
 

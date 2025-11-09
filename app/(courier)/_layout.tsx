@@ -28,17 +28,6 @@ export default function TabLayout() {
         },
       }}
     >
-      {/* 🏠 Page principale : liste des colis à accepter */}
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: "Colis",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={26} name="shippingbox.fill" color={color} />
-          ),
-        }}
-      />
-
       {/* 🧭 Navigation active (livraison en cours) */}
       <Tabs.Screen
         name="navigate"

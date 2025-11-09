@@ -32,7 +32,6 @@ export default function ParcelCard({ parcel, mode }: { parcel: ParcelWithAssign;
           </TouchableOpacity>
         )}
       </View>
-      {parcel.description ? <Text style={styles.cardText}>Description : {fmt(parcel.description)}</Text> : null}
       {parcel.adresseDepart ? <Text style={styles.cardText}>Départ : {fmt(parcel.adresseDepart)}</Text> : null}
       {parcel.adresseArrivee ? <Text style={styles.cardText}>Arrivée : {fmt(parcel.adresseArrivee)}</Text> : null}
       <Text style={styles.badge}>Statut : {statusFR(parcel.status)}</Text>

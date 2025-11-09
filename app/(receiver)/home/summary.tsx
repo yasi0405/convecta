@@ -28,7 +28,6 @@ async function createParcelFromData(data: Parcel) {
       status: "AVAILABLE",
       poids: (data.poids as number | undefined) ?? undefined,
       dimensions: data.dimensions || undefined,
-      description: data.description || undefined,
       adresseDepart: data.adresseDepart?.trim(),
       adresseArrivee: data.adresseArrivee?.trim(),
       createdAt: now,
@@ -44,7 +43,6 @@ type Parcel = {
   status?: "AVAILABLE" | "ASSIGNED" | "DELIVERED";
   poids?: number | string | null;
   dimensions?: string | null;
-  description?: string | null;
   adresseDepart?: string | null;   // ✅ nouveau
   adresseArrivee?: string | null;  // ✅ nouveau
   createdAt?: string | null;
@@ -87,7 +85,6 @@ export default function ParcelSummary() {
       type: rawType.trim() || undefined,
       poids: Number.isFinite(poidsNum as number) ? (poidsNum as number) : undefined,
       dimensions: params.dimensions ? String(params.dimensions) : undefined,
-      description: params.description ? String(params.description) : undefined,
       adresseDepart: params.adresseDepart ? String(params.adresseDepart) : undefined, // ✅
       adresseArrivee: params.adresseArrivee ? String(params.adresseArrivee) : undefined, // ✅
     };
@@ -147,7 +144,6 @@ export default function ParcelSummary() {
       <Row label="Type" value={fmt(data.type)} />
       <Row label="Poids" value={fmtKg(data.poids)} />
       <Row label="Dimensions" value={fmt(data.dimensions)} />
-      <Row label="Description" value={fmt(data.description)} />
       {/* ✅ 2 lignes adresses */}
       <Row label="Adresse de départ" value={fmt(data.adresseDepart)} />
       <Row label="Adresse d’arrivée" value={fmt(data.adresseArrivee)} />

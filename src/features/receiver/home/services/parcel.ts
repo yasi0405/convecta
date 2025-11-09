@@ -5,9 +5,9 @@ import { generateClient } from "aws-amplify/data";
 const client = generateClient<Schema>();
 
 export async function createParcel(input: {
+  type: string;
   poids?: number;
   dimensions?: string;
-  description?: string;
   adresseDepart: string;
   adresseArrivee: string;
   receiverId?: string;
@@ -21,9 +21,9 @@ export async function createParcel(input: {
   // @ts-ignore
   const res = await client.models.Parcel.create(
     {
+      type: input.type?.trim(),
       poids: input.poids,
       dimensions: input.dimensions?.trim(),
-      description: input.description?.trim(),
       adresseDepart: input.adresseDepart.trim(),
       adresseArrivee: input.adresseArrivee.trim(),
       status: input.status,
@@ -43,14 +43,13 @@ export async function updateParcel(input: {
   type?: string;
   poids?: number;
   dimensions?: string;
-  description?: string;
   adresseDepart?: string;
   adresseArrivee?: string;
 }) {
   const now = new Date().toISOString();
   // @ts-ignore
   const res = await client.models.Parcel.update(
-    { ...input, updatedAt: now } as any,
+    { ...input, type: input.type?.trim(), updatedAt: now } as any,
     { authMode: "userPool" }
   );
   return (res as any)?.data?.id as string;

@@ -46,6 +46,6 @@ export async function searchUsers(query: string): Promise<RecipientUser[]> {
       id: u.id,
       displayName: u.displayName || u.email || "Utilisateur",
       email: u.email,
-      defaultAddressLabel: undefined,
+      defaultAddressLabel: (u as any)?.defaultAddressLabel || (u as any)?.address || undefined,
     }));
 }

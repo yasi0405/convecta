@@ -9,7 +9,6 @@ export type ParcelWithAssign = Parcel & {
   adresseDepart?: string | null;
   adresseArrivee?: string | null;
   type?: string | null;
-  description?: string | null;
   poids?: number | string | null;
   dimensions?: string | null;
 };

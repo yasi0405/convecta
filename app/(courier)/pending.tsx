@@ -292,7 +292,6 @@ export default function CourierPendingList() {
         <Text style={styles.cardText}>Type : {fmt(item.type)}</Text>
         <Text style={styles.cardText}>Poids : {fmtKg(item.poids)}</Text>
         {item.dimensions ? <Text style={styles.cardText}>Dimensions : {fmt(item.dimensions)}</Text> : null}
-        {item.description ? <Text style={styles.cardText}>Description : {fmt(item.description)}</Text> : null}
         <Text style={styles.cardText}>Départ : {fmt(item.adresseDepart)}</Text>
         <Text style={styles.cardText}>Arrivée : {fmt(item.adresseArrivee)}</Text>
 

@@ -24,7 +24,6 @@ export function handleEditParcel(p: ParcelWithAssign) {
   const prefill = {
     id: p.id,
     type: p.type ?? "",
-    description: p.description ?? "",
     poids: p.poids ?? "",
     dimensions: p.dimensions ?? "",
     adresseDepart: p.adresseDepart ?? "",

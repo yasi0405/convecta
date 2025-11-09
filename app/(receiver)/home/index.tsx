@@ -13,6 +13,11 @@ import { createParcel, updateParcel } from "@features/receiver/home/services/par
 
 import type { RecipientMode, RecipientUser } from "@features/receiver/home/types";
 
+const TYPE_OPTIONS = [
+  { value: "standard", label: "Envoi standard" },
+  { value: "express", label: "Envoi rapide (prise du colis dans les 10 min)" },
+] as const;
+
 const notify = (title: string, msg: string) =>
   Platform.OS === "web" ? window.alert(`${title}\n\n${msg}`) : Alert.alert(title, msg);
 
@@ -23,10 +28,9 @@ export default function HomeScreen() {
   const [isEdit, setIsEdit] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
-  const [type, setType] = useState("");
+  const [type, setType] = useState<typeof TYPE_OPTIONS[number]["value"]>("standard");
   const [poids, setPoids] = useState("");
   const [dimensions, setDimensions] = useState("");
-  const [description, setDescription] = useState("");
   const [presetId, setPresetId] = useState<string | null>(null);
   const [typeOpen, setTypeOpen] = useState(false);
 
@@ -38,7 +42,7 @@ export default function HomeScreen() {
 
   const [recipientMode, setRecipientMode] = useState<RecipientMode>("address");
   const [selectedUser, setSelectedUser] = useState<RecipientUser | null>(null);
-  const [useUserDefaultAddress, setUseUserDefaultAddress] = useState<boolean>(true);
+  const [userSearchKey, setUserSearchKey] = useState(0);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +50,15 @@ export default function HomeScreen() {
   const { loading, err, durationSec, distanceM, commissionEUR } = useEstimate(adresseDepart, adresseArrivee);
 
   const handleSubmit = async () => {
+    if (!type) return setError("Choisis un type d'envoi.");
     if (!adresseDepart?.trim()) return setError("Ajoute une adresse de départ.");
     if (recipientMode === "address") {
       if (!adresseArrivee?.trim()) return setError("Ajoute une adresse d’arrivée (ou choisis un destinataire).");
     } else if (recipientMode === "user") {
       if (!selectedUser) return setError("Choisis un destinataire (Client B).");
+      if (!selectedUser.defaultAddressLabel?.trim()) {
+        return setError("Ce destinataire n'a pas d'adresse par défaut. Demande-lui de compléter son profil.");
+      }
     }
 
     const poidsNormalized = poids?.trim().replace(",", ".");
@@ -63,9 +71,9 @@ export default function HomeScreen() {
       if (isEdit && editId) {
         const id = await updateParcel({
           id: editId,
+          type,
           poids: poidsNum,
           dimensions,
-          description,
           adresseDepart,
           adresseArrivee,
         });
@@ -77,13 +85,13 @@ export default function HomeScreen() {
       const arrivalLabel =
         recipientMode === "address"
           ? (adresseArrivee ?? "").trim()
-          : (useUserDefaultAddress ? (selectedUser?.defaultAddressLabel ?? "") : (adresseArrivee ?? "").trim());
+          : (selectedUser?.defaultAddressLabel ?? "").trim();
       const statusForFlow = selectedUser ? "AWAITING_RECEIVER_CONFIRMATION" : "AVAILABLE";
 
       const id = await createParcel({
+        type,
         poids: poidsNum,
         dimensions,
-        description,
         adresseDepart,
         adresseArrivee: arrivalLabel,
         receiverId: receiver,
@@ -91,9 +99,9 @@ export default function HomeScreen() {
       });
 
       // reset soft
-      setType(""); setPoids(""); setDimensions(""); setDescription("");
+      setType("standard"); setTypeOpen(false); setPoids(""); setDimensions("");
       setAdresseDepart(""); setAdresseArrivee("");
-      setRecipientMode("address"); setSelectedUser(null); setUseUserDefaultAddress(true);
+      setRecipientMode("address"); setSelectedUser(null); setUserSearchKey((s) => s + 1);
 
       router.replace({ pathname: "/(receiver)/home/summary", params: { id } });
     } catch (e: any) {
@@ -109,15 +117,44 @@ export default function HomeScreen() {
 
       <View style={styles.headerRow}>
         <Text style={styles.title}>{isEdit ? "Modifier le colis" : "Nouveau colis"}</Text>
-        <TouchableOpacity style={styles.newButton} onPress={() => {
-          // reset rapide "nouveau"
-          setIsEdit(false); setEditId(null);
-          setType(""); setPoids(""); setDimensions(""); setDescription("");
-          setAdresseDepart(""); setAdresseArrivee("");
-          setRecipientMode("address"); setSelectedUser(null); setUseUserDefaultAddress(true);
-        }}>
-          <Text style={styles.newButtonText}>🆕 Nouveau colis</Text>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => {
+            setIsEdit(false); setEditId(null);
+            setType("standard"); setTypeOpen(false); setPoids(""); setDimensions("");
+            setAdresseDepart(""); setAdresseArrivee("");
+            setRecipientMode("address"); setSelectedUser(null); setUserSearchKey((s) => s + 1);
+          }}
+          accessibilityLabel="Réinitialiser le formulaire"
+        >
+          <Text style={styles.refreshIcon}>🔄</Text>
         </TouchableOpacity>
+      </View>
+
+      <Text style={styles.label}>Type d'envoi</Text>
+      <View style={styles.dropdownContainer}>
+        <TouchableOpacity style={styles.dropdownControl} onPress={() => setTypeOpen((prev) => !prev)} accessibilityLabel="Choisir le type d'envoi">
+          <Text style={styles.dropdownValue}>
+            {TYPE_OPTIONS.find((opt) => opt.value === type)?.label ?? "Choisir un type"}
+          </Text>
+          <Text style={styles.dropdownCaret}>{typeOpen ? "▲" : "▼"}</Text>
+        </TouchableOpacity>
+        {typeOpen && (
+          <View style={styles.dropdownList}>
+            {TYPE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.dropdownOption, type === opt.value && styles.dropdownOptionActive]}
+                onPress={() => {
+                  setType(opt.value);
+                  setTypeOpen(false);
+                }}
+              >
+                <Text style={styles.dropdownOptionText}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       <AddressField
@@ -147,16 +184,38 @@ export default function HomeScreen() {
 
       {recipientMode === "user" ? (
         <UserAutocomplete
+          key={userSearchKey}
           value={selectedUser}
           onSelect={(u) => {
             setSelectedUser(u);
             // si adresse par défaut connue, la préremplir
             // (tu peux ajouter un toggle si besoin)
           }}
+          onClearSelection={() => setSelectedUser(null)}
         />
       ) : null}
 
-      {(recipientMode === "address") || (recipientMode === "user" && !selectedUser?.defaultAddressLabel) ? (
+      {recipientMode === "user" && selectedUser ? (
+        <View style={styles.selectedUserCard}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={styles.selectedUserName}>{selectedUser.displayName}</Text>
+            <TouchableOpacity onPress={() => {
+              setSelectedUser(null);
+              setUserSearchKey((s) => s + 1);
+            }}>
+              <Text style={styles.selectedUserAction}>Changer</Text>
+            </TouchableOpacity>
+          </View>
+          {selectedUser.email ? <Text style={styles.selectedUserMeta}>{selectedUser.email}</Text> : null}
+          {selectedUser.defaultAddressLabel ? (
+            <Text style={styles.selectedUserAddress}>{selectedUser.defaultAddressLabel}</Text>
+          ) : (
+            <Text style={styles.selectedUserWarning}>Aucune adresse enregistrée</Text>
+          )}
+        </View>
+      ) : null}
+
+      {recipientMode === "address" ? (
         <AddressField
           label="Adresse d’arrivée"
           value={adresseArrivee}
@@ -185,15 +244,6 @@ export default function HomeScreen() {
         placeholderTextColor={Colors.textSecondary}
       />
 
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Contenu, précautions, etc."
-        value={description}
-        onChangeText={setDescription}
-        placeholderTextColor={Colors.textSecondary}
-      />
-
       <EstimateCard
         loading={loading}
         err={err}
@@ -215,8 +265,8 @@ const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: Colors.background, flexGrow: 1 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 },
   title: { fontSize: 22, textAlign: "left", color: Colors.text, flex: 1 },
-  newButton: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
-  newButtonText: { color: Colors.textOnCard, fontWeight: "700" },
+  refreshButton: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, alignItems: "center", justifyContent: "center", width: 44, height: 44 },
+  refreshIcon: { fontSize: 20 },
   label: { color: Colors.text, marginBottom: 6, marginTop: 10, fontWeight: "600" },
   error: { color: "#b00020", marginBottom: 8, fontWeight: "700" },
   input: { backgroundColor: Colors.input, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 8, color: Colors.text },
@@ -226,4 +276,42 @@ const styles = StyleSheet.create({
   toggleLabelActive: { color: Colors.button, fontWeight: "700" },
   button: { backgroundColor: Colors.button, paddingVertical: 14, borderRadius: 8, marginTop: 8, alignItems: "center" },
   buttonText: { color: Colors.buttonText, fontSize: 16, fontWeight: "bold" },
+  dropdownContainer: { marginBottom: 16 },
+  dropdownControl: {
+    backgroundColor: Colors.input,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dropdownValue: { color: Colors.text, fontWeight: "600", flex: 1 },
+  dropdownCaret: { color: Colors.textSecondary, marginLeft: 8 },
+  dropdownList: {
+    marginTop: 4,
+    backgroundColor: Colors.card,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  dropdownOption: { paddingVertical: 12, paddingHorizontal: 12 },
+  dropdownOptionActive: { backgroundColor: Colors.input },
+  dropdownOptionText: { color: Colors.text },
+  selectedUserCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    marginTop: 8,
+  },
+  selectedUserName: { color: Colors.text, fontWeight: "700", fontSize: 16 },
+  selectedUserMeta: { color: Colors.textSecondary, marginTop: 4 },
+  selectedUserAddress: { color: Colors.text, marginTop: 8, fontStyle: "italic" },
+  selectedUserWarning: { color: "#f87171", marginTop: 8 },
+  selectedUserAction: { color: Colors.accent, fontWeight: "600" },
 });

@@ -54,7 +54,6 @@ const Parcel = a
     type: a.string(),
     poids: a.float(),
     dimensions: a.string(),
-    description: a.string(),
 
     adresseDepart: a.string().required(),
     adresseArrivee: a.string().required(),

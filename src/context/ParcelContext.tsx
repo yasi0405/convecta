@@ -15,7 +15,6 @@ export interface Parcel {
   type?: string;
   poids?: number | string | null;
   dimensions?: string | null;
-  description?: string | null;
 
   adresseDepart?: string | null;
   adresseArrivee?: string | null;
