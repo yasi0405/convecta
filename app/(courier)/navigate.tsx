@@ -1,5 +1,6 @@
 // app/(courier)/navigate.tsx
 import Colors from "@/theme/Colors";
+import { useAddressAutocomplete } from "@/features/receiver/home/hooks/useAddressAutocomplete";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import MapboxGL from "@rnmapbox/maps";
@@ -12,6 +13,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -22,7 +24,7 @@ if (HAS_MAPBOX && MAPBOX_TOKEN) {
   MapboxGL.setAccessToken(MAPBOX_TOKEN);
 }
 
-const DESTINATIONS = [
+const DESTINATIONS: Destination[] = [
   { id: "brussels", label: "Bruxelles", missions: "15 missions disponibles", query: "Bruxelles, Belgique" },
   { id: "lille", label: "Lille", missions: "8 missions disponibles", query: "Lille, France" },
   { id: "charleroi", label: "Charleroi", missions: "3 livraisons express", query: "Charleroi, Belgique" },
@@ -59,7 +61,12 @@ const OFFER_PRESETS = [
 ] as const;
 
 type Stage = "dest" | "offer" | "live";
-type Destination = typeof DESTINATIONS[number];
+type Destination = {
+  id: string;
+  label: string;
+  missions: string;
+  query: string;
+};
 type Offer = typeof OFFER_PRESETS[number];
 type Coords = { lat: number; lng: number };
 
@@ -72,6 +79,8 @@ export default function CourierNavigate() {
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [destLabel, setDestLabel] = useState<string | null>(null);
   const [destAddress, setDestAddress] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { suggestions, setSuggestions } = useAddressAutocomplete(searchQuery);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +266,11 @@ export default function CourierNavigate() {
   const renderDestStage = () => (
     <SafeAreaView style={styles.pickScreen}>
       <ScrollView contentContainerStyle={styles.heroContent}>
+        <View style={styles.exitRow}>
+          <TouchableOpacity onPress={() => router.replace("/")}>
+            <Text style={styles.backLink}>← Menu principal</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.heroTitle}>Où souhaitez-vous aller aujourd'hui ?</Text>
         <Text style={styles.heroSubtitle}>Convecta relie les routes, vous choisissez la direction.</Text>
         <View style={{ marginTop: 20, width: "100%", gap: 12 }}>
@@ -276,6 +290,45 @@ export default function CourierNavigate() {
               </TouchableOpacity>
             );
           })}
+        </View>
+        <View style={{ width: "100%", marginTop: 24 }}>
+          <Text style={styles.searchLabel}>Recherche personnalisée</Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Adresse ou ville (Mapbox)"
+              placeholderTextColor={Colors.textSecondary}
+              value={searchQuery}
+              onChangeText={(t) => {
+                setSearchQuery(t);
+                if (!t.trim()) setSuggestions([]);
+              }}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+          </View>
+          {suggestions.length > 0 && (
+            <View style={styles.suggestBox}>
+              {suggestions.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.suggestItem}
+                  onPress={() => {
+                    setSelectedDestination({
+                      id: s.id,
+                      label: s.label.split(",")[0] ?? s.label,
+                      missions: "Trajet personnalisé",
+                      query: s.label,
+                    });
+                    setSearchQuery(s.label);
+                    setSuggestions([]);
+                  }}
+                >
+                  <Text style={styles.suggestText}>{s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
       <View style={styles.ctaBar}>
@@ -346,10 +399,13 @@ export default function CourierNavigate() {
         <TouchableOpacity onPress={goBackToDest}>
           <Text style={styles.backLink}>← Itinéraires</Text>
         </TouchableOpacity>
-        <View>
-          <Text style={styles.liveTitle}>{destLabel}</Text>
-          <Text style={styles.liveSubtitle}>{selectedOffer?.title}</Text>
-        </View>
+        <TouchableOpacity onPress={() => router.replace("/")}>
+          <Text style={styles.backLink}>Quitter</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.liveTitleWrap}>
+        <Text style={styles.liveTitle}>{destLabel}</Text>
+        <Text style={styles.liveSubtitle}>{selectedOffer?.title}</Text>
       </View>
 
       <View style={styles.mapContainer}>
@@ -475,8 +531,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     alignItems: "center",
   },
+  exitRow: { alignSelf: "stretch", alignItems: "flex-start", marginBottom: 12 },
   heroTitle: { color: Colors.text, fontSize: 26, fontWeight: "700", textAlign: "center", marginBottom: 8 },
   heroSubtitle: { color: Colors.textSecondary, fontSize: 15, textAlign: "center" },
+  exitRow: { alignSelf: "stretch", marginBottom: 12 },
   destinationCard: {
     backgroundColor: Colors.card,
     borderRadius: 16,
@@ -500,6 +558,21 @@ const styles = StyleSheet.create({
   },
   destinationLabel: { color: Colors.text, fontSize: 17, fontWeight: "700" },
   destinationMeta: { color: Colors.textSecondary },
+  searchLabel: { color: Colors.textSecondary, fontWeight: "600", marginBottom: 8, marginTop: 12 },
+  searchRow: { flexDirection: "row", alignItems: "center" },
+  searchInput: {
+    flex: 1,
+    backgroundColor: Colors.input,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: Colors.text,
+  },
+  suggestBox: { backgroundColor: Colors.card, borderRadius: 12, marginTop: 8, overflow: "hidden" },
+  suggestItem: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  suggestText: { color: Colors.text },
   ctaBar: { padding: 20 },
   primaryBtn: {
     backgroundColor: Colors.accent,
@@ -540,6 +613,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  liveTitleWrap: { paddingHorizontal: 20, paddingBottom: 8 },
   liveTitle: { color: Colors.text, fontSize: 20, fontWeight: "700" },
   liveSubtitle: { color: Colors.textSecondary, fontSize: 14 },
   mapContainer: { flex: 1, borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#0f172a" },

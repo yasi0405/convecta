@@ -27,7 +27,11 @@ function AppShell() {
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
-  const hideTopBar = pathname?.startsWith("/home/onboarding");
+  const isNavigationScreen = segments?.includes("(courier)") && segments?.includes("navigate");
+  const hideTopBar =
+    pathname?.startsWith("/home/onboarding") ||
+    pathname?.startsWith("/(courier)/navigate") ||
+    isNavigationScreen;
   const isProfile = pathname?.startsWith("/profile");
 
   const switchLabel = isCourier ? 'Receveur' : 'Livreur';

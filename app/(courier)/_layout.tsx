@@ -33,6 +33,7 @@ export default function TabLayout() {
         name="navigate"
         options={{
           title: "Navigation",
+          tabBarStyle: { display: "none" },
           tabBarIcon: ({ color }) => (
             <IconSymbol size={26} name="location.fill" color={color} />
           ),
