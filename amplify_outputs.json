@@ -311,6 +311,27 @@
               "isRequired": false,
               "attributes": []
             },
+            "bank_account_holder": {
+              "name": "bank_account_holder",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "bank_iban": {
+              "name": "bank_iban",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "bank_bic": {
+              "name": "bank_bic",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
             "kyc_status": {
               "name": "kyc_status",
               "isArray": false,

@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -17,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 const HAS_MAPBOX = Platform.OS === "ios" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
@@ -60,6 +62,14 @@ const OFFER_PRESETS = [
   },
 ] as const;
 
+const STOP_REASONS = [
+  "Problème véhicule",
+  "Accident / sécurité",
+  "Client injoignable",
+  "Météo",
+  "Autre",
+] as const;
+
 type Stage = "dest" | "offer" | "live";
 type Destination = {
   id: string;
@@ -91,6 +101,17 @@ export default function CourierNavigate() {
   const [nextStep, setNextStep] = useState<Step | null>(null);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanVisible, setScanVisible] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
+  const [scannedOnce, setScannedOnce] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<"ongoing" | "completed">("ongoing");
+  const [pauseActive, setPauseActive] = useState(false);
+  const [pauseRemaining, setPauseRemaining] = useState<number | null>(null);
+  const pauseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [stopPickerOpen, setStopPickerOpen] = useState(false);
+  const [stopReason, setStopReason] = useState<string | null>(null);
 
   const resetLiveData = () => {
     setOrigin(null);
@@ -263,6 +284,88 @@ export default function CourierNavigate() {
 
   const etaText = etaSec != null ? formatETA(etaSec) : "—";
   const distText = remainMeters != null ? formatKm(remainMeters) : "—";
+
+  useEffect(() => {
+    if (!pauseActive) {
+      if (pauseTimerRef.current) {
+        clearInterval(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
+      return;
+    }
+    if (pauseRemaining === null) {
+      setPauseRemaining(15 * 60);
+    }
+    if (pauseTimerRef.current) {
+      clearInterval(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    pauseTimerRef.current = setInterval(() => {
+      setPauseRemaining((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          if (pauseTimerRef.current) {
+            clearInterval(pauseTimerRef.current);
+            pauseTimerRef.current = null;
+          }
+          setPauseActive(false);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (pauseTimerRef.current) {
+        clearInterval(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
+    };
+  }, [pauseActive]);
+
+  const handleOpenScanner = async () => {
+    if (!permission?.granted) {
+      const granted = await requestPermission();
+      if (!granted?.granted) {
+        setScanMsg("Permission caméra refusée.");
+        return;
+      }
+    }
+    setScanMsg("");
+    setScannedOnce(false);
+    setScanBusy(false);
+    setScanVisible(true);
+  };
+
+  const handleScannedCode = (data: string) => {
+    if (scannedOnce) return;
+    setScannedOnce(true);
+    setScanBusy(true);
+    setScanMsg("Validation…");
+    setTimeout(() => {
+      setLiveStatus("completed");
+      setScanMsg("Colis validé ✅");
+      setScanBusy(false);
+      setTimeout(() => setScanVisible(false), 700);
+    }, 1200);
+  };
+
+  const handlePausePress = () => {
+    if (pauseActive) return;
+    setPauseActive(true);
+    setPauseRemaining(15 * 60);
+  };
+
+  const handleResume = () => {
+    setPauseActive(false);
+    setPauseRemaining(null);
+  };
+
+  const formatPauseTimer = () => {
+    if (!pauseRemaining) return "15:00";
+    const m = Math.floor(pauseRemaining / 60);
+    const s = pauseRemaining % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
   const renderDestStage = () => (
     <SafeAreaView style={styles.pickScreen}>
       <ScrollView contentContainerStyle={styles.heroContent}>
@@ -469,10 +572,75 @@ export default function CourierNavigate() {
             <Text style={styles.overlayValue}>{selectedOffer?.bonus ?? "—"}</Text>
           </View>
           {nextStep && (
-            <Text style={styles.overlayHint}>
-              Prochaine étape : {nextStep.instruction} ({formatKm(nextStep.distance)} · {formatETA(nextStep.duration)})
-            </Text>
-          )}
+          <Text style={styles.overlayHint}>
+            Prochaine étape : {nextStep.instruction} ({formatKm(nextStep.distance)} · {formatETA(nextStep.duration)})
+          </Text>
+        )}
+        <TouchableOpacity style={styles.scanButton} onPress={handleOpenScanner}>
+            <Text style={styles.scanButtonIcon}>📷</Text>
+            <View>
+              <Text style={styles.scanButtonTitle}>
+                {liveStatus === "completed" ? "Colis validés" : "Scanner un colis"}
+              </Text>
+              <Text style={styles.scanButtonSubtitle}>
+                {liveStatus === "completed" ? "QR confirmé" : "Flasher pour confirmer"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <View style={styles.controlCard}>
+            <View style={styles.controlRow}>
+              <View>
+                <Text style={styles.controlTitle}>Pause éco</Text>
+                <Text style={styles.controlSubtitle}>
+                  {pauseActive ? `Temps restant ${formatPauseTimer()}` : "15 min maximum"}
+                </Text>
+              </View>
+              {pauseActive ? (
+                <TouchableOpacity style={styles.resumeBtn} onPress={handleResume}>
+                  <Text style={styles.resumeBtnText}>Continuer</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.pauseBtn, pauseActive && { opacity: 0.3 }]}
+                  onPress={handlePausePress}
+                  disabled={pauseActive}
+                >
+                  <Text style={styles.pauseBtnText}>Pause</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          <View style={styles.controlCard}>
+            <Text style={styles.controlTitle}>Stop exceptionnel</Text>
+            <TouchableOpacity
+              style={styles.dropdownControl}
+              onPress={() => setStopPickerOpen((prev) => !prev)}
+            >
+              <Text style={styles.dropdownValue}>
+                {stopReason ?? "Sélectionner un motif"}
+              </Text>
+              <Text style={styles.dropdownCaret}>{stopPickerOpen ? "▲" : "▼"}</Text>
+            </TouchableOpacity>
+            {stopPickerOpen && (
+              <View style={styles.dropdownList}>
+                {STOP_REASONS.map((reason) => (
+                  <TouchableOpacity
+                    key={reason}
+                    style={styles.dropdownOption}
+                    onPress={() => {
+                      setStopReason(reason);
+                      setStopPickerOpen(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownOptionText}>{reason}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {stopReason && (
+              <Text style={styles.controlSubtitle}>Motif sélectionné : {stopReason}</Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -489,6 +657,43 @@ export default function CourierNavigate() {
           <Text style={styles.secondaryBtnText}>Changer d’itinéraire</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={scanVisible} animationType="slide" presentationStyle="fullScreen">
+        <View style={styles.scanModal}>
+          <View style={styles.scanHeader}>
+            <Text style={styles.scanTitle}>Scanner le QR</Text>
+            <TouchableOpacity onPress={() => setScanVisible(false)}>
+              <Text style={styles.scanClose}>Fermer ✕</Text>
+            </TouchableOpacity>
+          </View>
+          {permission && !permission.granted ? (
+            <View style={styles.scanMessageBox}>
+              <Text style={styles.scanMessage}>Permission caméra refusée. Autorise-la dans les réglages.</Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+                <Text style={styles.primaryBtnText}>Autoriser</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={styles.scannerFrame}>
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  onBarcodeScanned={scannedOnce ? undefined : ({ data }) => handleScannedCode(data)}
+                />
+                <View style={styles.scanHintOverlay}>
+                  <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>
+                </View>
+              </View>
+              <View style={styles.scanFooter}>
+                {scanMsg ? <Text style={styles.scanMessage}>{scanMsg}</Text> : null}
+                {scanBusy && <ActivityIndicator color={Colors.accent} />}
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 
@@ -534,7 +739,6 @@ const styles = StyleSheet.create({
   exitRow: { alignSelf: "stretch", alignItems: "flex-start", marginBottom: 12 },
   heroTitle: { color: Colors.text, fontSize: 26, fontWeight: "700", textAlign: "center", marginBottom: 8 },
   heroSubtitle: { color: Colors.textSecondary, fontSize: 15, textAlign: "center" },
-  exitRow: { alignSelf: "stretch", marginBottom: 12 },
   destinationCard: {
     backgroundColor: Colors.card,
     borderRadius: 16,
@@ -627,6 +831,69 @@ const styles = StyleSheet.create({
     width: 220,
     gap: 6,
   },
+  controlCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "rgba(10,15,25,0.92)",
+    gap: 8,
+  },
+  controlRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  controlTitle: { color: Colors.text, fontWeight: "700" },
+  controlSubtitle: { color: Colors.textSecondary, fontSize: 12 },
+  pauseBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
+  pauseBtnText: { color: Colors.background, fontWeight: "700" },
+  resumeBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  resumeBtnText: { color: Colors.accent, fontWeight: "700" },
+  scanButton: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  scanButtonIcon: { fontSize: 20 },
+  scanButtonTitle: { color: Colors.text, fontWeight: "700" },
+  scanButtonSubtitle: { color: Colors.textSecondary, fontSize: 12 },
+  dropdownControl: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.card,
+  },
+  dropdownValue: { color: Colors.text, flex: 1 },
+  dropdownCaret: { color: Colors.textSecondary, marginLeft: 8 },
+  dropdownList: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: Colors.card,
+  },
+  dropdownOption: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  dropdownOptionText: { color: Colors.text },
   overlayTitle: { color: Colors.accent, fontWeight: "700", marginBottom: 4 },
   overlayRow: { flexDirection: "row", justifyContent: "space-between" },
   overlayLabel: { color: Colors.textSecondary, fontSize: 12 },
@@ -647,4 +914,33 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: Colors.accent, fontWeight: "700" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   centerText: { color: Colors.text, marginTop: 8 },
+  scanModal: { flex: 1, backgroundColor: Colors.background, padding: 16, paddingTop: 48, gap: 12 },
+  scanHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  scanTitle: { color: Colors.text, fontSize: 18, fontWeight: "700" },
+  scanClose: { color: Colors.textSecondary, fontWeight: "600" },
+  scanMessageBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  scanMessage: { color: Colors.text, textAlign: "center" },
+  scannerFrame: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  scanHintOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+  },
+  scanHintText: { color: Colors.text, fontWeight: "600" },
+  scanFooter: { paddingVertical: 16, alignItems: "center", gap: 8 },
 });

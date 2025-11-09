@@ -118,6 +118,9 @@ const UserProfile = a
     addresses: a.json(), // tableau d'adresses structurées
     contacts: a.json(), // personnes de contact
     kyc_document_front_url: a.string(),
+    bank_account_holder: a.string(),
+    bank_iban: a.string(),
+    bank_bic: a.string(),
     kyc_status: a.ref("KycStatus").required(), // default handled at create
     createdAt: a.datetime().required(),
     updatedAt: a.datetime().required(),

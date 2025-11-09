@@ -29,6 +29,9 @@ export async function getOrCreateProfile() {
     addresses: JSON.stringify([]),
     contacts: JSON.stringify([]),
     kyc_document_front_url: "",
+    bank_account_holder: "",
+    bank_iban: "",
+    bank_bic: "",
     kyc_status: "none",
     createdAt: now,
     updatedAt: now,
@@ -52,6 +55,9 @@ export async function updateProfile(p: Partial<{
   contacts: ContactInput[];
   kyc_document_front_url: string;
   kyc_status: "none" | "registered" | "pending" | "verified" | "rejected";
+  bank_account_holder: string;
+  bank_iban: string;
+  bank_bic: string;
 }>) {
   const me = await getProfile();
   if (!me) throw new Error("Profile not found");
@@ -67,6 +73,9 @@ export async function updateProfile(p: Partial<{
   if (p.national_registry_number !== undefined) nextPayload.national_registry_number = p.national_registry_number;
   if (p.kyc_document_front_url !== undefined) nextPayload.kyc_document_front_url = p.kyc_document_front_url;
   if (p.kyc_status !== undefined) nextPayload.kyc_status = p.kyc_status;
+  if (p.bank_account_holder !== undefined) nextPayload.bank_account_holder = p.bank_account_holder;
+  if (p.bank_iban !== undefined) nextPayload.bank_iban = p.bank_iban;
+  if (p.bank_bic !== undefined) nextPayload.bank_bic = p.bank_bic;
 
   const serializedAddresses = serializeJson(p.addresses);
   if (serializedAddresses !== undefined) nextPayload.addresses = serializedAddresses;

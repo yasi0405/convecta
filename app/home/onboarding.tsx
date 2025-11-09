@@ -242,12 +242,12 @@ function useIdScanAutoFill(
 }
 
 // ---------------------------------------------
-// Composant principal: Wizard 3 écrans
+// Composant principal: Wizard 4 écrans
 // ---------------------------------------------
 export default function Onboarding() {
   const router = useRouter();
   // Stepper
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1
   const [first_name, setFirst] = useState("");
@@ -260,6 +260,10 @@ export default function Onboarding() {
 
   // Step 3
   const [contacts, setContacts] = useState<Contact[]>([{ name: "", phone: "" }]);
+  // Step 4
+  const [bank_account_holder, setBankHolder] = useState("");
+  const [bank_iban, setBankIban] = useState("");
+  const [bank_bic, setBankBic] = useState("");
 
   // Shared (OCR)
   const [frontUri, setFrontUri] = useState<string | undefined>();
@@ -302,6 +306,13 @@ export default function Onboarding() {
     const filled = contacts.filter((c) => c.name.trim() && c.phone.trim());
     return filled.length >= 1;
   }, [contacts]);
+  const step4Valid = useMemo(() => {
+    if (!bank_account_holder.trim()) return false;
+    const iban = bank_iban.trim().replace(/\s+/g, "").toUpperCase();
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{8,}$/.test(iban)) return false;
+    if (bank_bic.trim() && !/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bank_bic.trim().toUpperCase())) return false;
+    return true;
+  }, [bank_account_holder, bank_iban, bank_bic]);
 
   useEffect(() => {
     let cancelled = false;
@@ -325,12 +336,17 @@ export default function Onboarding() {
   function goNext() {
     if (step === 1 && step1Valid) setStep(2);
     else if (step === 2 && step2Valid) setStep(3);
+    else if (step === 3 && step3Valid) setStep(4);
   }
-  function goBack() { if (step === 2) setStep(1); else if (step === 3) setStep(2); }
+  function goBack() {
+    if (step === 2) setStep(1);
+    else if (step === 3) setStep(2);
+    else if (step === 4) setStep(3);
+  }
 
   // Submit
   async function onSave() {
-    if (!step3Valid) return;
+    if (!step3Valid || !step4Valid) return;
     const cleanAddresses = addresses
       .map((a) => ({
         street: a.street.trim(),
@@ -365,6 +381,9 @@ export default function Onboarding() {
       national_registry_number: rrn,
       addresses: cleanAddresses,
       contacts: cleanContacts,
+      bank_account_holder: bank_account_holder.trim(),
+      bank_iban: bank_iban.trim(),
+      bank_bic: bank_bic.trim(),
       kyc_status: "registered",
     };
     if (kycFrontUrl) profilePayload.kyc_document_front_url = kycFrontUrl;
@@ -411,7 +430,7 @@ export default function Onboarding() {
       {/* Header */}
       <HStack>
         <Text style={{ color: Colors.text, fontSize: 18, fontWeight: "700", flex: 1 }}>Onboarding KYC</Text>
-        <Text style={{ color: Colors.textSecondary }}>Étape {step}/3</Text>
+        <Text style={{ color: Colors.textSecondary }}>Étape {step}/4</Text>
       </HStack>
 
       {/* Camera overlay */}
@@ -595,6 +614,46 @@ export default function Onboarding() {
         </Card>
       )}
 
+      {/* STEP 4 */}
+      {step === 4 && (
+        <Card>
+          <Text style={{ color: Colors.text, fontWeight: "700", fontSize: 16 }}>Coordonnées bancaires</Text>
+          <Text style={{ color: Colors.textSecondary }}>
+            Ces informations seront utilisées pour connecter ton compte à Stripe. Elles restent confidentielles.
+          </Text>
+
+          <Label>Titulaire du compte</Label>
+          <Input
+            value={bank_account_holder}
+            onChangeText={setBankHolder}
+            placeholder="Nom complet"
+            autoCapitalize="words"
+          />
+
+          <Label>IBAN</Label>
+          <Input
+            value={bank_iban}
+            onChangeText={setBankIban}
+            placeholder="BE00 0000 0000 0000"
+            autoCapitalize="characters"
+          />
+
+          <Label>BIC (facultatif)</Label>
+          <Input
+            value={bank_bic}
+            onChangeText={setBankBic}
+            placeholder="GEBABEBB"
+            autoCapitalize="characters"
+          />
+
+          {!step4Valid && (
+            <Text style={{ color: "#ff6b6b" }}>
+              Renseigne un titulaire et un IBAN valide (BIC optionnel).
+            </Text>
+          )}
+        </Card>
+      )}
+
       {/* Footer navigation */}
       <HStack gap={12}>
         {step > 1 ? (
@@ -602,15 +661,19 @@ export default function Onboarding() {
         ) : (
           <View style={{ flex: 1 }} />
         )}
-        {step < 3 ? (
+        {step < 4 ? (
           <PrimaryButton
             title="Suivant"
             onPress={goNext}
-            disabled={(step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
+            disabled={
+              (step === 1 && !step1Valid) ||
+              (step === 2 && !step2Valid) ||
+              (step === 3 && !step3Valid)
+            }
             full
           />
         ) : (
-          <PrimaryButton title="Enregistrer" onPress={onSave} disabled={!step3Valid} full />
+          <PrimaryButton title="Enregistrer" onPress={onSave} disabled={!step4Valid} full />
         )}
       </HStack>
 

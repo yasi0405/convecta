@@ -53,6 +53,7 @@ export default function CourierPendingList() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanVisible, setScanVisible] = useState<boolean>(false);
   const [scanningParcel, setScanningParcel] = useState<Parcel | null>(null);
+  const [scanPurpose, setScanPurpose] = useState<"PICKUP" | "DELIVERY">("DELIVERY");
   const [scannedOnce, setScannedOnce] = useState<boolean>(false);
   const [scanBusy, setScanBusy] = useState<boolean>(false);
   const [scanMsg, setScanMsg] = useState<string>("");
@@ -146,25 +147,6 @@ export default function CourierPendingList() {
 
   const currentParcelId = useMemo(() => myParcels[0]?.id ?? null, [myParcels]);
 
-  const startMission = async (p: Parcel) => {
-    if (!p?.id || !userId) return;
-    setActingId(String(p.id));
-    try {
-      await client.models.Parcel.update({
-        id: p.id,
-        status: "IN_PROGRESS",
-        assignedTo: p.assignedTo ?? userId,
-        updatedAt: new Date().toISOString(),
-        authMode: "userPool",
-      });
-      await loadMyParcels();
-    } catch (e) {
-      console.log("startMission error:", e);
-    } finally {
-      setActingId(null);
-    }
-  };
-
   const setDelivering = async (p: Parcel) => {
     if (!p?.id || !userId) return;
     setActingId(String(p.id));
@@ -184,8 +166,8 @@ export default function CourierPendingList() {
     }
   };
 
-  // 📷 Ouvre la caméra pour scanner le QR du client et valider la livraison
-  const openScanner = async (p: Parcel) => {
+  // 📷 Ouvre la caméra pour scanner le QR (émétteur ou destinataire)
+  const openScanner = async (p: Parcel, purpose: "PICKUP" | "DELIVERY") => {
     if (!permission?.granted) {
       const granted = await requestPermission();
       if (!granted?.granted) {
@@ -194,12 +176,13 @@ export default function CourierPendingList() {
       }
     }
     setScanningParcel(p);
+    setScanPurpose(purpose);
     setScannedOnce(false);
     setScanMsg("");
     setScanVisible(true);
   };
 
-  // Après scan → appelle verifyScan (purpose: DELIVERY)
+  // Après scan → appelle verifyScan (purpose: PICKUP ou DELIVERY)
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scannedOnce || !scanningParcel?.id) return;
     setScannedOnce(true);
@@ -210,7 +193,7 @@ export default function CourierPendingList() {
       // data = code signé dans le QR coté client
       const resp = await (client as any).mutations.verifyScan({
         parcelId: String(scanningParcel.id),
-        purpose: "DELIVERY",
+        purpose: scanPurpose,
         code: String(data || ""),
         authMode: "userPool",
       });
@@ -233,7 +216,8 @@ export default function CourierPendingList() {
       try {
         await client.models.Parcel.update({
           id: String(scanningParcel.id),
-          status: "DELIVERED",
+          status: scanPurpose === "PICKUP" ? "IN_PROGRESS" : "DELIVERED",
+          assignedTo: scanningParcel.assignedTo ?? userId ?? undefined,
           updatedAt: new Date().toISOString(),
           authMode: "userPool",
         });
@@ -297,19 +281,21 @@ export default function CourierPendingList() {
 
         <View style={styles.actionsRow}>
           {/* 🟩 Bouton vert : Scanner la validation de réception */}
-          <TouchableOpacity style={[styles.button, styles.validate]} onPress={() => openScanner(item)}>
-            <Text style={styles.validateText}>Scanner réception</Text>
-          </TouchableOpacity>
-
-          {item.status === "ASSIGNED" && index === 0 && (
+          {item.status === "ASSIGNED" ? (
+            <TouchableOpacity style={[styles.button, styles.validate]} onPress={() => openScanner(item, "PICKUP")}>
+              <Text style={styles.validateText}>Scanner retrait</Text>
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity
-              style={[styles.button, styles.primary]}
-              onPress={() => startMission(item)}
-              disabled={isActing}
+              style={[styles.button, styles.validate]}
+              onPress={() => openScanner(item, "DELIVERY")}
+              disabled={item.status !== "DELIVERING" && item.status !== "IN_PROGRESS"}
             >
-              {isActing ? <ActivityIndicator /> : <Text style={styles.buttonText}>Démarrer</Text>}
+              <Text style={styles.validateText}>Scanner réception</Text>
             </TouchableOpacity>
           )}
+
+          {/* Démarrage manuel retiré : le scan pickup déclenche l'étape */}
 
           {item.status === "IN_PROGRESS" && (
             <TouchableOpacity
@@ -398,7 +384,9 @@ export default function CourierPendingList() {
         >
           <View style={styles.modalInner}>
             <View style={styles.scanHeader}>
-              <Text style={styles.scanTitle}>Scanner le QR du client</Text>
+              <Text style={styles.scanTitle}>
+                {scanPurpose === "PICKUP" ? "Scanner le QR de l'émetteur" : "Scanner le QR du destinataire"}
+              </Text>
               <Pressable onPress={() => setScanVisible(false)}>
                 <Text style={styles.scanClose}>Fermer ✕</Text>
               </Pressable>

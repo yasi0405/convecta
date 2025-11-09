@@ -14,6 +14,9 @@ type FormFields = {
   address: string;
   addresses: AddressForm[];
   contacts: ContactForm[];
+  bank_account_holder: string;
+  bank_iban: string;
+  bank_bic: string;
 };
 
 const emptyAddress: AddressForm = { street: "", postalCode: "", city: "", country: "" };
@@ -40,6 +43,9 @@ function normalizeProfile(data: any): FormFields {
     address: data?.address ?? "",
     addresses: addresses.length ? addresses : [emptyAddress],
     contacts: contacts.length ? contacts : [emptyContact],
+    bank_account_holder: data?.bank_account_holder ?? "",
+    bank_iban: data?.bank_iban ?? "",
+    bank_bic: data?.bank_bic ?? "",
   };
 }
 
@@ -322,6 +328,31 @@ export default function ProfileScreen() {
               <Text style={{ color: Colors.text }}>Ajouter un référent (max 5)</Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        <View style={{ backgroundColor: Colors.card, borderRadius: 14, padding: 16 }}>
+          <Text style={{ color: Colors.text, fontWeight: "600", marginBottom: 12 }}>Coordonnées bancaires</Text>
+          <Field
+            label="Titulaire du compte"
+            value={form.bank_account_holder}
+            editable={editing}
+            placeholder="Nom complet"
+            onChangeText={(t) => handleChange("bank_account_holder", t)}
+          />
+          <Field
+            label="IBAN"
+            value={form.bank_iban}
+            editable={editing}
+            placeholder="BE00 0000 0000 0000"
+            onChangeText={(t) => handleChange("bank_iban", t)}
+          />
+          <Field
+            label="BIC"
+            value={form.bank_bic}
+            editable={editing}
+            placeholder="GEBABEBB"
+            onChangeText={(t) => handleChange("bank_bic", t)}
+          />
         </View>
       </ScrollView>
 
