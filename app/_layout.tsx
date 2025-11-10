@@ -12,6 +12,7 @@ import { Amplify } from "aws-amplify";
 import Colors from "@/theme/Colors";
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import outputs from "../amplify_outputs.json";
 
 Amplify.configure(outputs);
@@ -54,12 +55,12 @@ function AppShell() {
             <View style={styles.modeSwitchRow}>
               {isCourier ? (
                 <View style={[styles.modeIcon, styles.modeIconActive]}>
-                  <Text style={styles.modeIconText}>🚚</Text>
+                  <IconSymbol name="truck.fill" color={Colors.accent} size={20} />
                 </View>
               ) : (
                 <Link href="/(courier)/navigate" asChild>
                   <TouchableOpacity style={styles.modeIcon} accessibilityLabel="Basculer en mode livreur">
-                    <Text style={styles.modeIconText}>🚚</Text>
+                    <IconSymbol name="truck.fill" color={Colors.accent} size={20} />
                   </TouchableOpacity>
                 </Link>
               )}
@@ -67,19 +68,19 @@ function AppShell() {
               {isCourier ? (
                 <Link href="/(receiver)/home" asChild>
                   <TouchableOpacity style={styles.modeIcon} accessibilityLabel="Basculer en mode receveur">
-                    <Text style={styles.modeIconText}>📦</Text>
+                    <IconSymbol name="cube.box.fill" color={Colors.accent} size={20} />
                   </TouchableOpacity>
                 </Link>
               ) : (
                 <View style={[styles.modeIcon, styles.modeIconActive]}>
-                  <Text style={styles.modeIconText}>📦</Text>
+                  <IconSymbol name="cube.box.fill" color={Colors.accent} size={20} />
                 </View>
               )}
             </View>
           )}
 
           <TouchableOpacity style={styles.avatarButton} onPress={() => setMenuOpen(true)} accessibilityLabel="Ouvrir le menu utilisateur">
-            <Text style={styles.avatarButtonText}>👤</Text>
+            <IconSymbol name="person.circle.fill" color={Colors.accent} size={20} />
           </TouchableOpacity>
         </View>
       )}
@@ -100,7 +101,7 @@ function AppShell() {
       {menuOpen && (
         <View style={styles.menuOverlay}>
           <TouchableOpacity style={styles.menuClose} onPress={() => setMenuOpen(false)} accessibilityLabel="Fermer le menu utilisateur">
-            <Text style={styles.menuCloseText}>✕</Text>
+            <IconSymbol name="xmark.circle.fill" color={Colors.accent} size={22} />
           </TouchableOpacity>
           <View style={styles.menuContent}>
             <Text style={styles.menuTitle}>Mon compte</Text>
@@ -156,7 +157,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#161D25',
+    backgroundColor: Colors.background,
   },
   topBar: {
     flexDirection: "row",

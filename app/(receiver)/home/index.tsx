@@ -2,6 +2,7 @@ import Colors from "@/theme/Colors";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AddressField } from "@features/receiver/home/components/AddressField";
 import { EstimateCard } from "@features/receiver/home/components/EstimateCard";
@@ -112,7 +113,12 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 80 }]} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingBottom: 80 }]}
+        keyboardShouldPersistTaps="handled"
+      >
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.headerRow}>
@@ -257,11 +263,14 @@ export default function HomeScreen() {
           {submitting ? (isEdit ? "Mise à jour…" : "Création…") : (isEdit ? "Mettre à jour" : "Valider")}
         </Text>
       </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flex: 1, backgroundColor: Colors.background },
   container: { padding: 20, backgroundColor: Colors.background, flexGrow: 1 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 },
   title: { fontSize: 22, textAlign: "left", color: Colors.text, flex: 1 },

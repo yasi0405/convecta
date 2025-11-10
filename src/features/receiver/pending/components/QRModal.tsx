@@ -3,7 +3,23 @@ import { ActivityIndicator, Modal, Platform, Pressable, Text, View } from "react
 import QRCode from "react-native-qrcode-svg";
 import { styles } from "../styles";
 
-export default function QRModal({ visible, onClose, qrError, qrValue, qrParcel, insets }: any) {
+export default function QRModal({
+  visible,
+  onClose,
+  qrError,
+  qrValue,
+  qrParcel,
+  qrLoading,
+  insets,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  qrError: string | null;
+  qrValue: string | null;
+  qrParcel: any;
+  qrLoading?: boolean;
+  insets: { top: number; bottom: number; left: number; right: number };
+}) {
   return (
     <Modal
       animationType="slide"
@@ -47,7 +63,7 @@ export default function QRModal({ visible, onClose, qrError, qrValue, qrParcel, 
                 ) : null}
               </>
             ) : (
-              <ActivityIndicator />
+              qrLoading ? <ActivityIndicator /> : <Text style={styles.qrHint}>Préparation du QR…</Text>
             )}
           </View>
         </View>

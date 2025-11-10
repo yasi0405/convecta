@@ -17,6 +17,7 @@ export function usePendingParcels() {
   const [qrValue, setQrValue] = useState<string | null>(null);
   const [qrParcel, setQrParcel] = useState<ParcelWithAssign | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -94,6 +95,40 @@ export function usePendingParcels() {
     loadTakenParcels();
   }, [loadMyPendingParcels, loadTakenParcels]);
 
+  const showQrForParcel = useCallback(
+    async (parcel: ParcelWithAssign) => {
+      if (!parcel?.id) return;
+      setQrParcel(parcel);
+      setQrValue(null);
+      setQrError(null);
+      setQrLoading(true);
+      setQrVisible(true);
+      try {
+        const resp = await (client as any).mutations.generateScanCode({
+          parcelId: String(parcel.id),
+          purpose: "DELIVERY",
+          authMode: "userPool",
+        });
+        const data =
+          resp?.data?.generateScanCode ??
+          resp?.data ??
+          resp?.generateScanCode ??
+          resp;
+        const code = data?.code ? String(data.code) : null;
+        if (!code) {
+          setQrError("Impossible de générer le QR pour ce colis.");
+        } else {
+          setQrValue(code);
+        }
+      } catch (e: any) {
+        setQrError(e?.message ?? "Erreur lors de la génération du QR.");
+      } finally {
+        setQrLoading(false);
+      }
+    },
+    []
+  );
+
   return {
     myPendingParcels,
     takenParcels,
@@ -106,6 +141,8 @@ export function usePendingParcels() {
     qrValue,
     qrParcel,
     qrError,
+    qrLoading,
     insets,
+    showQrForParcel,
   };
 }

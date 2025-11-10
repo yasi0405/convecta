@@ -1,5 +1,5 @@
 const Colors = {
-  background: '#161D25',       // Fond global
+  background: '#030712',       // Fond global
   text: '#FFFFFF',             // Texte principal
   accent: '#44DEAC',           // Couleur secondaire (CTA, liens)
   card: '#1E2A36',             // Fond des composants (cards, inputs)

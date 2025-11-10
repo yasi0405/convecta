@@ -4,6 +4,7 @@ import {
   useAudioPlayer,
   useAudioRecorder,
 } from 'expo-audio';
+import Colors from "@/theme/Colors";
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, View } from 'react-native';
 
@@ -78,23 +79,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#161D25',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.background,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 10,
+    color: Colors.text,
   },
   subtitle: {
     fontSize: 16,
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
+    color: Colors.textSecondary,
   },
   result: {
     marginTop: 20,
     fontSize: 16,
-    color: 'green',
+    color: Colors.accent,
   },
 });

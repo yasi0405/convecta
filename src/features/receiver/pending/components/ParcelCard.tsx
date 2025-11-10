@@ -1,10 +1,18 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { handleEditParcel, handleShowDeliveryQR } from "../services/parcels";
+import { handleEditParcel } from "../services/parcels";
 import { styles } from "../styles";
 import { ParcelWithAssign } from "../types";
 
-export default function ParcelCard({ parcel, mode }: { parcel: ParcelWithAssign; mode: "pending" | "taken" }) {
+export default function ParcelCard({
+  parcel,
+  mode,
+  onShowQr,
+}: {
+  parcel: ParcelWithAssign;
+  mode: "pending" | "taken";
+  onShowQr?: (parcel: ParcelWithAssign) => void;
+}) {
   const fmt = (v?: string | number | null) => (v == null || v === "" ? "—" : String(v));
   const fmtKg = (v?: number | string | null) => (v ? `${v} kg` : "—");
   const statusFR = (s?: ParcelWithAssign["status"]) =>
@@ -27,7 +35,7 @@ export default function ParcelCard({ parcel, mode }: { parcel: ParcelWithAssign;
             <Text style={styles.editButtonText}>Modifier</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.qrButton} onPress={() => handleShowDeliveryQR(parcel)}>
+          <TouchableOpacity style={styles.qrButton} onPress={() => onShowQr?.(parcel)}>
             <Text style={styles.qrButtonText}>Valider (QR)</Text>
           </TouchableOpacity>
         )}

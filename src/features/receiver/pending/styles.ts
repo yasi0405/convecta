@@ -2,8 +2,12 @@ import Colors from "@/theme/Colors";
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: Colors.background },
-  title: { fontSize: 22, marginBottom: 14, textAlign: "center", color: Colors.text },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { padding: 20, paddingBottom: 40, gap: 28 },
+  section: { gap: 12 },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  sectionMeta: { color: Colors.textSecondary, fontSize: 13 },
+  title: { fontSize: 22, textAlign: "left", color: Colors.text, fontWeight: "700" },
 
   card: {
     borderWidth: 1,
@@ -15,7 +19,8 @@ export const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   cardTitle: { color: Colors.textOnCard, fontWeight: "600" },
-  cardText: { color: Colors.textOnCard, marginBottom: 4 },
+  cardList: { gap: 12 },
+  cardText: { color: Colors.textSecondary, marginBottom: 4 },
 
   row: { flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 8 },
   badge: {
@@ -26,15 +31,6 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-
-  button: {
-    backgroundColor: Colors.button,
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 12,
-    alignItems: "center",
-  },
-  buttonText: { color: Colors.buttonText, fontSize: 16, fontWeight: "bold" },
 
   qrButton: {
     backgroundColor: "#1DB954",

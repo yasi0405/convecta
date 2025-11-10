@@ -1,14 +1,19 @@
 // app/(courier)/navigate.tsx
 import Colors from "@/theme/Colors";
 import { useAddressAutocomplete } from "@/features/receiver/home/hooks/useAddressAutocomplete";
+import type { Schema } from "@/amplify/data/resource";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import MapboxGL from "@rnmapbox/maps";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentUser } from "aws-amplify/auth";
+import { generateClient } from "aws-amplify/data";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  FlatList,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -25,11 +30,13 @@ const HAS_MAPBOX = Platform.OS === "ios" && !!(MapboxGL as any)?.MapView && !!MA
 if (HAS_MAPBOX && MAPBOX_TOKEN) {
   MapboxGL.setAccessToken(MAPBOX_TOKEN);
 }
+const client = generateClient<Schema>();
 
 const DESTINATIONS: Destination[] = [
   { id: "brussels", label: "Bruxelles", missions: "15 missions disponibles", query: "Bruxelles, Belgique" },
   { id: "lille", label: "Lille", missions: "8 missions disponibles", query: "Lille, France" },
   { id: "charleroi", label: "Charleroi", missions: "3 livraisons express", query: "Charleroi, Belgique" },
+  { id: "loop", label: "Pas de destination précise", missions: "Je me laisse guider", query: "" },
 ] as const;
 
 const OFFER_PRESETS = [
@@ -70,6 +77,12 @@ const STOP_REASONS = [
   "Autre",
 ] as const;
 
+const LOOP_HOUR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0h → 12h
+const LOOP_MINUTE_OPTIONS = [0, 15, 30, 45];
+const LOOP_PICKER_ITEM_HEIGHT = 48;
+const LOOP_PICKER_HEIGHT = 220;
+const LOOP_PICKER_PADDING = (LOOP_PICKER_HEIGHT - LOOP_PICKER_ITEM_HEIGHT) / 2;
+
 type Stage = "dest" | "offer" | "live";
 type Destination = {
   id: string;
@@ -81,6 +94,19 @@ type Offer = typeof OFFER_PRESETS[number];
 type Coords = { lat: number; lng: number };
 
 type Step = { instruction: string; distance: number; duration: number };
+
+const geocodeCache = new Map<string, Coords>();
+
+const extractParcels = (payload: any): any[] => {
+  if (!payload) return [];
+  const candidate =
+    payload?.data?.listParcels?.items ??
+    payload?.listParcels?.items ??
+    payload?.data?.items ??
+    payload?.items ??
+    [];
+  return Array.isArray(candidate) ? candidate.filter(Boolean) : [];
+};
 
 export default function CourierNavigate() {
   const router = useRouter();
@@ -110,8 +136,70 @@ export default function CourierNavigate() {
   const [pauseActive, setPauseActive] = useState(false);
   const [pauseRemaining, setPauseRemaining] = useState<number | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [stopPickerOpen, setStopPickerOpen] = useState(false);
-  const [stopReason, setStopReason] = useState<string | null>(null);
+const [stopPickerOpen, setStopPickerOpen] = useState(false);
+const [stopReason, setStopReason] = useState<string | null>(null);
+const [autoAssignLoading, setAutoAssignLoading] = useState(false);
+const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
+const [autoAssignedParcel, setAutoAssignedParcel] = useState<{ id: string; label: string } | null>(null);
+const [courierId, setCourierId] = useState<string | null>(null);
+  const [loopModalVisible, setLoopModalVisible] = useState(false);
+  const [loopDuration, setLoopDuration] = useState<number | null>(null);
+  const [loopSelection, setLoopSelection] = useState<number>(60);
+  const hourListRef = useRef<FlatList<number> | null>(null);
+  const minuteListRef = useRef<FlatList<number> | null>(null);
+  const loopIntentRef = useRef<"stay" | "toOffer" | "toLive">("stay");
+
+const scrollPickersTo = (value: number, animated = true) => {
+  const hoursVal = Math.floor(value / 60);
+  const minutesVal = value % 60;
+  const minuteIdx = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(minutesVal));
+  hourListRef.current?.scrollToOffset({ offset: LOOP_PICKER_ITEM_HEIGHT * hoursVal, animated });
+  minuteListRef.current?.scrollToOffset({ offset: LOOP_PICKER_ITEM_HEIGHT * minuteIdx, animated });
+};
+
+const enforceLoopSelection = (hours: number, minutes: number) => {
+  let safeHours = Math.min(12, Math.max(0, hours));
+  let safeMinutes = LOOP_MINUTE_OPTIONS.includes(minutes) ? minutes : 0;
+
+  if (safeHours === 12 && safeMinutes > 0) {
+    safeMinutes = 0;
+  }
+  if (safeHours === 0 && safeMinutes === 0) {
+    safeMinutes = 15;
+  }
+
+  const normalized = safeHours * 60 + safeMinutes;
+  const clamped = Math.min(12 * 60, Math.max(15, normalized));
+  setLoopSelection(clamped);
+
+  const adjusted =
+    safeHours !== hours || safeMinutes !== minutes || clamped !== normalized;
+  if (adjusted) {
+    scrollPickersTo(clamped, true);
+  }
+
+  return clamped;
+};
+
+const handleHourMomentum = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const index = Math.round(event.nativeEvent.contentOffset.y / LOOP_PICKER_ITEM_HEIGHT);
+  const safeIndex = Math.min(LOOP_HOUR_OPTIONS.length - 1, Math.max(0, index));
+  const hoursValue = LOOP_HOUR_OPTIONS[safeIndex];
+  const minutesValue = loopSelection % 60;
+  enforceLoopSelection(hoursValue, minutesValue);
+};
+
+const handleMinuteMomentum = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const index = Math.round(event.nativeEvent.contentOffset.y / LOOP_PICKER_ITEM_HEIGHT);
+  const safeIndex = Math.min(LOOP_MINUTE_OPTIONS.length - 1, Math.max(0, index));
+  const minutesValue = LOOP_MINUTE_OPTIONS[safeIndex];
+  const hoursValue = Math.floor(loopSelection / 60);
+  enforceLoopSelection(hoursValue, minutesValue);
+};
+
+const loopHoursValue = Math.floor(loopSelection / 60);
+const loopMinutesValue = loopSelection % 60;
+const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValue));
 
   const resetLiveData = () => {
     setOrigin(null);
@@ -121,6 +209,12 @@ export default function CourierNavigate() {
     setNextStep(null);
     setRouteCoords([]);
     setError(null);
+    setAutoAssignLoading(false);
+    setAutoAssignError(null);
+    setAutoAssignedParcel(null);
+    setPauseActive(false);
+    setPauseRemaining(null);
+    setStopReason(null);
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
@@ -137,9 +231,11 @@ export default function CourierNavigate() {
 
   const handleAcceptOffer = () => {
     if (!selectedDestination || !selectedOffer) return;
-    setDestAddress(selectedDestination.query);
-    setDestLabel(selectedDestination.label);
-    setStage("live");
+    if (selectedDestination.id === "loop" && !loopDuration) {
+      openLoopModal("toLive");
+      return;
+    }
+    startLiveNavigation();
   };
 
   // 1. Locate courier whenever stage=live
@@ -168,9 +264,11 @@ export default function CourierNavigate() {
     };
   }, [stage]);
 
-  // 2. Geocode destination
+  // 2. Geocode destination (non loop)
   useEffect(() => {
-    if (stage !== "live" || !destAddress) return;
+    if (stage !== "live") return;
+    if (!destAddress) return;
+    if (selectedDestination?.id === "loop") return;
     let mounted = true;
     (async () => {
       if (!MAPBOX_TOKEN) {
@@ -195,7 +293,20 @@ export default function CourierNavigate() {
     return () => {
       mounted = false;
     };
-  }, [stage, destAddress]);
+  }, [stage, destAddress, selectedDestination]);
+
+  // Keep target synced with origin for loop trips
+  useEffect(() => {
+    if (stage !== "live") return;
+    if (selectedDestination?.id !== "loop") return;
+    if (!origin) return;
+    setTarget((prev) => {
+      if (prev && Math.abs(prev.lat - origin.lat) < 1e-5 && Math.abs(prev.lng - origin.lng) < 1e-5) {
+        return prev;
+      }
+      return origin;
+    });
+  }, [stage, origin, selectedDestination]);
 
   // 3. Directions polling
   useEffect(() => {
@@ -259,28 +370,6 @@ export default function CourierNavigate() {
       }
     };
   }, [stage, target]);
-
-  const staticMapUrl = useMemo(() => {
-    if (!MAPBOX_TOKEN) return null;
-    const fallback = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/4.3517,50.8503,12,0/800x600?access_token=${MAPBOX_TOKEN}`;
-    const mkA = origin ? `pin-l-a+00ffc3(${origin.lng},${origin.lat})` : null;
-    const mkB = target ? `pin-l-b+00ffc3(${target.lng},${target.lat})` : null;
-    const sampled = downsample(routeCoords, 80);
-    const path =
-      sampled.length >= 2
-        ? `path-5+00ffc3-0.85(${sampled.map(([lng, lat]) => `${lng},${lat}`).join(";")})`
-        : null;
-
-    if (origin && target) {
-      const overlays = [mkA, mkB, path].filter(Boolean).join(",");
-      return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${overlays}/auto/800x600?logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
-    }
-    if (target && !origin) {
-      const overlays = [mkB].filter(Boolean).join(",");
-      return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${overlays}/${target.lng},${target.lat},12,0/800x600?logo=false&access_token=${MAPBOX_TOKEN}&ts=${Date.now()}`;
-    }
-    return fallback;
-  }, [origin, target, routeCoords]);
 
   const etaText = etaSec != null ? formatETA(etaSec) : "—";
   const distText = remainMeters != null ? formatKm(remainMeters) : "—";
@@ -349,6 +438,58 @@ export default function CourierNavigate() {
     }, 1200);
   };
 
+  const autoAssignNearestParcel = async (destination: Destination) => {
+    if (!courierId) return;
+    try {
+      setAutoAssignLoading(true);
+      setAutoAssignError(null);
+      setAutoAssignedParcel(null);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") throw new Error("Permission localisation refusée.");
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const courierPos: Coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+
+      const res = await client.models.Parcel.list({
+        filter: { status: { eq: "AVAILABLE" } },
+        limit: 30,
+        authMode: "userPool",
+      });
+      const parcels = extractParcels(res);
+
+      let best: { parcel: any; dist: number } | null = null;
+      for (const parcel of parcels) {
+        if (!parcel?.adresseDepart) continue;
+        const coords = await geocodeAddress(parcel.adresseDepart);
+        if (!coords) continue;
+        const dist = distanceBetween(courierPos, coords);
+        if (!best || dist < best.dist) best = { parcel, dist };
+      }
+
+      if (!best || !best.parcel?.id) {
+        setAutoAssignError("Aucun colis compatible trouvé pour ce trajet.");
+        return;
+      }
+
+      await client.models.Parcel.update({
+        id: best.parcel.id,
+        status: "ASSIGNED",
+        assignedTo: courierId,
+        updatedAt: new Date().toISOString(),
+        authMode: "userPool",
+      });
+
+      setAutoAssignedParcel({
+        id: best.parcel.id,
+        label: best.parcel.adresseDepart ?? destination.label,
+      });
+    } catch (e) {
+      setAutoAssignError("Impossible d'assigner automatiquement un colis.");
+    } finally {
+      setAutoAssignLoading(false);
+    }
+  };
+
   const handlePausePress = () => {
     if (pauseActive) return;
     setPauseActive(true);
@@ -366,85 +507,214 @@ export default function CourierNavigate() {
     const s = pauseRemaining % 60;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
-  const renderDestStage = () => (
-    <SafeAreaView style={styles.pickScreen}>
-      <ScrollView contentContainerStyle={styles.heroContent}>
-        <View style={styles.exitRow}>
-          <TouchableOpacity onPress={() => router.replace("/")}>
-            <Text style={styles.backLink}>← Menu principal</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.heroTitle}>Où souhaitez-vous aller aujourd'hui ?</Text>
-        <Text style={styles.heroSubtitle}>Convecta relie les routes, vous choisissez la direction.</Text>
-        <View style={{ marginTop: 20, width: "100%", gap: 12 }}>
-          {DESTINATIONS.map((dest) => {
-            const active = selectedDestination?.id === dest.id;
-            return (
-              <TouchableOpacity
-                key={dest.id}
-                style={[styles.destinationCard, active && styles.destinationCardActive]}
-                onPress={() => setSelectedDestination(dest)}
-              >
-                <View style={styles.destIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.destinationLabel}>{dest.label}</Text>
-                  <Text style={styles.destinationMeta}>{dest.missions}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <View style={{ width: "100%", marginTop: 24 }}>
-          <Text style={styles.searchLabel}>Recherche personnalisée</Text>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Adresse ou ville (Mapbox)"
-              placeholderTextColor={Colors.textSecondary}
-              value={searchQuery}
-              onChangeText={(t) => {
-                setSearchQuery(t);
-                if (!t.trim()) setSuggestions([]);
-              }}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
+
+  const formatDurationLabel = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h && m) return `${h} h ${String(m).padStart(2, "0")} min`;
+    if (h) return `${h} h`;
+    return `${m} min`;
+  };
+
+  const openLoopModal = useCallback(
+    (intent: "stay" | "toOffer" | "toLive" = "stay", fallbackSelection?: number | null) => {
+      loopIntentRef.current = intent;
+      setLoopSelection((prev) => {
+        if (typeof fallbackSelection === "number") return fallbackSelection;
+        return loopDuration ?? prev;
+      });
+      setLoopModalVisible(true);
+    },
+    [loopDuration]
+  );
+
+  const closeLoopModal = useCallback(() => {
+    setLoopModalVisible(false);
+    loopIntentRef.current = "stay";
+  }, []);
+
+  const formatLoopAddressLabel = (mins?: number | null) =>
+    mins ? `Boucle locale (${formatDurationLabel(mins)})` : "Boucle locale";
+
+  const startLiveNavigation = (durationOverride?: number) => {
+    if (!selectedDestination || !selectedOffer) return;
+    setDestLabel(selectedDestination.label);
+    if (selectedDestination.id === "loop") {
+      const durationValue = durationOverride ?? loopDuration ?? loopSelection;
+      setDestAddress(formatLoopAddressLabel(durationValue));
+    } else {
+      setDestAddress(selectedDestination.query);
+    }
+    setStage("live");
+    autoAssignNearestParcel(selectedDestination);
+  };
+
+  const handleLoopConfirm = () => {
+    const rounded = Math.min(12 * 60, Math.max(15, loopSelection));
+    setLoopDuration(rounded);
+    setLoopModalVisible(false);
+
+    if (loopIntentRef.current === "toOffer") {
+      setStage("offer");
+    } else if (loopIntentRef.current === "toLive") {
+      startLiveNavigation(rounded);
+    }
+  };
+
+  const handleLoopCancel = () => {
+    closeLoopModal();
+    if (!loopDuration) setSelectedDestination(null);
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        const uid =
+          (user as any)?.userId ??
+          (user as any)?.username ??
+          (user as any)?.signInDetails?.loginId ??
+          null;
+        setCourierId(uid);
+      } catch {
+        setCourierId(null);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!loopModalVisible) return;
+    const baseValue = loopDuration ?? loopSelection;
+    requestAnimationFrame(() => scrollPickersTo(baseValue, false));
+  }, [loopModalVisible, loopDuration, loopSelection]);
+
+useEffect(() => {
+  if (selectedDestination?.id === "loop") return;
+  if (!loopModalVisible) return;
+  closeLoopModal();
+  }, [selectedDestination, loopModalVisible, closeLoopModal]);
+
+useEffect(() => {
+  if (stage === "dest") return;
+  if (!loopModalVisible) return;
+  closeLoopModal();
+  }, [stage, loopModalVisible, closeLoopModal]);
+
+useEffect(() => {
+  if (stage !== "dest") return;
+  if (selectedDestination?.id !== "loop") return;
+  if (loopDuration !== null) return;
+  if (loopModalVisible) return;
+  openLoopModal("stay");
+}, [stage, selectedDestination, loopDuration, loopModalVisible, openLoopModal]);
+  const renderDestStage = () => {
+    const ctaDisabled =
+      !selectedDestination || (selectedDestination.id === "loop" && !loopDuration);
+
+    return (
+      <SafeAreaView style={styles.pickScreen}>
+        <ScrollView contentContainerStyle={styles.heroContent}>
+          <View style={styles.exitRow}>
+            <TouchableOpacity onPress={() => router.replace("/")}>
+              <Text style={styles.backLink}>← Menu principal</Text>
+            </TouchableOpacity>
           </View>
-          {suggestions.length > 0 && (
-            <View style={styles.suggestBox}>
-              {suggestions.map((s) => (
+          <Text style={styles.heroTitle}>Où souhaitez-vous aller aujourd'hui ?</Text>
+          <Text style={styles.heroSubtitle}>Convecta relie les routes, vous choisissez la direction.</Text>
+          <View style={{ marginTop: 20, width: "100%", gap: 12 }}>
+            {DESTINATIONS.map((dest) => {
+              const active = selectedDestination?.id === dest.id;
+              return (
                 <TouchableOpacity
-                  key={s.id}
-                  style={styles.suggestItem}
+                  key={dest.id}
+                  style={[styles.destinationCard, active && styles.destinationCardActive]}
                   onPress={() => {
-                    setSelectedDestination({
-                      id: s.id,
-                      label: s.label.split(",")[0] ?? s.label,
-                      missions: "Trajet personnalisé",
-                      query: s.label,
-                    });
-                    setSearchQuery(s.label);
-                    setSuggestions([]);
+                    setSelectedDestination(dest);
+                    if (dest.id !== "loop") {
+                      setLoopDuration(null);
+                      setLoopSelection(60);
+                      closeLoopModal();
+                    } else {
+                      const fallback = loopDuration ?? loopSelection ?? 60;
+                      setLoopDuration(null);
+                      openLoopModal("stay", fallback);
+                    }
                   }}
                 >
-                  <Text style={styles.suggestText}>{s.label}</Text>
+                  <View style={styles.destIcon} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.destinationLabel}>{dest.label}</Text>
+                    <Text style={styles.destinationMeta}>{dest.missions}</Text>
+                  </View>
                 </TouchableOpacity>
-              ))}
+              );
+            })}
+          </View>
+          <View style={{ width: "100%", marginTop: 24 }}>
+            <Text style={styles.searchLabel}>Recherche personnalisée</Text>
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Adresse ou ville (Mapbox)"
+                placeholderTextColor={Colors.textSecondary}
+                value={searchQuery}
+                onChangeText={(t) => {
+                  setSearchQuery(t);
+                  if (!t.trim()) setSuggestions([]);
+                }}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
             </View>
-          )}
+            {suggestions.length > 0 && (
+              <View style={styles.suggestBox}>
+                {suggestions.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={styles.suggestItem}
+                    onPress={() => {
+                      setSelectedDestination({
+                        id: s.id,
+                        label: s.label.split(",")[0] ?? s.label,
+                        missions: "Trajet personnalisé",
+                        query: s.label,
+                      });
+                      setSearchQuery(s.label);
+                      setSuggestions([]);
+                      closeLoopModal();
+                    }}
+                  >
+                    <Text style={styles.suggestText}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {selectedDestination?.id === "loop" && loopDuration && (
+              <Text style={styles.loopSummary}>
+                Disponibilité définie : {formatDurationLabel(loopDuration)}
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+        <View style={styles.ctaBar}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, ctaDisabled && { opacity: 0.4 }]}
+            disabled={ctaDisabled}
+            onPress={() => {
+              if (!selectedDestination) return;
+              if (selectedDestination.id === "loop" && !loopDuration) {
+                openLoopModal("toOffer");
+                return;
+              }
+              setStage("offer");
+            }}
+          >
+            <Text style={styles.primaryBtnText}>DÉMARER MON VOYAGE</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-      <View style={styles.ctaBar}>
-        <TouchableOpacity
-          style={[styles.primaryBtn, !selectedDestination && { opacity: 0.4 }]}
-          disabled={!selectedDestination}
-          onPress={() => setStage("offer")}
-        >
-          <Text style={styles.primaryBtnText}>DÉMARER MON VOYAGE</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
+      </SafeAreaView>
+    );
+  };
 
   const renderOfferStage = () => {
     if (!selectedDestination) {
@@ -550,7 +820,9 @@ export default function CourierNavigate() {
             )}
           </MapboxGL.MapView>
         ) : (
-          staticMapUrl && <Image source={{ uri: staticMapUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          <View style={styles.mapFallback}>
+            <Text style={styles.mapFallbackText}>Carte non disponible sur cet appareil.</Text>
+          </View>
         )}
 
         <View style={styles.liveOverlay}>
@@ -641,6 +913,18 @@ export default function CourierNavigate() {
               <Text style={styles.controlSubtitle}>Motif sélectionné : {stopReason}</Text>
             )}
           </View>
+          {autoAssignLoading && (
+            <Text style={styles.controlSubtitle}>Recherche d'un colis proche…</Text>
+          )}
+          {autoAssignError && (
+            <Text style={styles.errorTextSmall}>{autoAssignError}</Text>
+          )}
+          {autoAssignedParcel && (
+            <View style={styles.controlCard}>
+              <Text style={styles.controlTitle}>Colis assigné automatiquement</Text>
+              <Text style={styles.controlSubtitle}>{autoAssignedParcel.label}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -657,59 +941,184 @@ export default function CourierNavigate() {
           <Text style={styles.secondaryBtnText}>Changer d’itinéraire</Text>
         </TouchableOpacity>
       </View>
-
-      <Modal visible={scanVisible} animationType="slide" presentationStyle="fullScreen">
-        <View style={styles.scanModal}>
-          <View style={styles.scanHeader}>
-            <Text style={styles.scanTitle}>Scanner le QR</Text>
-            <TouchableOpacity onPress={() => setScanVisible(false)}>
-              <Text style={styles.scanClose}>Fermer ✕</Text>
-            </TouchableOpacity>
-          </View>
-          {permission && !permission.granted ? (
-            <View style={styles.scanMessageBox}>
-              <Text style={styles.scanMessage}>Permission caméra refusée. Autorise-la dans les réglages.</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
-                <Text style={styles.primaryBtnText}>Autoriser</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <View style={styles.scannerFrame}>
-                <CameraView
-                  style={StyleSheet.absoluteFillObject}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={scannedOnce ? undefined : ({ data }) => handleScannedCode(data)}
-                />
-                <View style={styles.scanHintOverlay}>
-                  <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>
-                </View>
-              </View>
-              <View style={styles.scanFooter}>
-                {scanMsg ? <Text style={styles.scanMessage}>{scanMsg}</Text> : null}
-                {scanBusy && <ActivityIndicator color={Colors.accent} />}
-              </View>
-            </>
-          )}
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 
-  if (stage === "offer") return renderOfferStage();
-  if (stage === "live") return renderLiveStage();
-  return renderDestStage();
+  const renderScanModal = () => (
+    <Modal visible={scanVisible} animationType="slide" presentationStyle="fullScreen">
+      <View style={styles.scanModal}>
+        <View style={styles.scanHeader}>
+          <Text style={styles.scanTitle}>Scanner le QR</Text>
+          <TouchableOpacity onPress={() => setScanVisible(false)}>
+            <Text style={styles.scanClose}>Fermer ✕</Text>
+          </TouchableOpacity>
+        </View>
+        {permission && !permission.granted ? (
+          <View style={styles.scanMessageBox}>
+            <Text style={styles.scanMessage}>Permission caméra refusée. Autorise-la dans les réglages.</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+              <Text style={styles.primaryBtnText}>Autoriser</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.scannerFrame}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                onBarcodeScanned={scannedOnce ? undefined : ({ data }) => handleScannedCode(data)}
+              />
+              <View style={styles.scanHintOverlay}>
+                <Text style={styles.scanHintText}>Place le QR dans le cadre</Text>
+              </View>
+            </View>
+            <View style={styles.scanFooter}>
+              {scanMsg ? <Text style={styles.scanMessage}>{scanMsg}</Text> : null}
+              {scanBusy && <ActivityIndicator color={Colors.accent} />}
+            </View>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+
+  const renderLoopModal = () => (
+    <Modal visible={loopModalVisible} transparent animationType="fade" onRequestClose={handleLoopCancel}>
+      <View style={styles.loopModalOverlay}>
+        <View style={styles.loopModalCard}>
+          <Text style={styles.loopTitle}>Combien de temps es-tu disponible ?</Text>
+          <Text style={styles.loopSubtitle}>
+            Choisis une durée par paliers de 15 minutes. Convecta bâtit la boucle idéale.
+          </Text>
+          <View style={styles.loopPickerWrapper}>
+            <View style={styles.loopPickerHighlight} pointerEvents="none" />
+            <View style={styles.loopPicker}>
+              <View style={styles.loopPickerColumn}>
+                <FlatList
+                  ref={(ref) => (hourListRef.current = ref)}
+                  data={LOOP_HOUR_OPTIONS}
+                  keyExtractor={(item) => item.toString()}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={LOOP_PICKER_ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  contentContainerStyle={{ paddingVertical: LOOP_PICKER_PADDING }}
+                  getItemLayout={(_, index) => ({
+                    length: LOOP_PICKER_ITEM_HEIGHT,
+                    offset: LOOP_PICKER_ITEM_HEIGHT * index,
+                    index,
+                  })}
+                  initialScrollIndex={loopHoursValue}
+                  onMomentumScrollEnd={handleHourMomentum}
+                  renderItem={({ item }) => {
+                    const active = item === loopHoursValue;
+                    return (
+                      <View style={styles.loopPickerItem}>
+                        <Text style={[styles.loopPickerValue, active && styles.loopPickerValueActive]}>
+                          {item}
+                        </Text>
+                      </View>
+                    );
+                  }}
+                />
+                <Text style={styles.loopPickerUnit}>heures</Text>
+              </View>
+              <View style={styles.loopPickerColumn}>
+                <FlatList
+                  ref={(ref) => (minuteListRef.current = ref)}
+                  data={LOOP_MINUTE_OPTIONS}
+                  keyExtractor={(item) => item.toString()}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={LOOP_PICKER_ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  contentContainerStyle={{ paddingVertical: LOOP_PICKER_PADDING }}
+                  getItemLayout={(_, index) => ({
+                    length: LOOP_PICKER_ITEM_HEIGHT,
+                    offset: LOOP_PICKER_ITEM_HEIGHT * index,
+                    index,
+                  })}
+                  initialScrollIndex={loopMinutesIndex}
+                  onMomentumScrollEnd={handleMinuteMomentum}
+                  renderItem={({ item }) => {
+                    const active = item === loopMinutesValue;
+                    return (
+                      <View style={styles.loopPickerItem}>
+                        <Text style={[styles.loopPickerValue, active && styles.loopPickerValueActive]}>
+                          {String(item).padStart(2, "0")}
+                        </Text>
+                      </View>
+                    );
+                  }}
+                />
+                <Text style={styles.loopPickerUnit}>minutes</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={styles.loopHint}>Sélection minimum 15 min, maximum 12 h.</Text>
+          <View style={styles.loopActions}>
+            <TouchableOpacity style={styles.loopCancel} onPress={handleLoopCancel}>
+              <Text style={styles.loopCancelText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.loopConfirm} onPress={handleLoopConfirm}>
+              <Text style={styles.loopConfirmText}>Continuer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderStage = () => {
+    if (stage === "offer") return renderOfferStage();
+    if (stage === "live") return renderLiveStage();
+    return renderDestStage();
+  };
+
+  return (
+    <>
+      {renderStage()}
+      {renderLoopModal()}
+      {renderScanModal()}
+    </>
+  );
 }
 
-function downsample(coords: [number, number][], maxPts: number): [number, number][] {
-  if (!coords || coords.length <= maxPts) return coords ?? [];
-  const step = Math.max(1, Math.floor(coords.length / maxPts));
-  const out: [number, number][] = [];
-  for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
-  const last = coords[coords.length - 1];
-  if (out[out.length - 1] !== last) out.push(last);
-  return out;
+async function geocodeAddress(label: string): Promise<Coords | null> {
+  const trimmed = label?.trim();
+  if (!trimmed || !MAPBOX_TOKEN) return null;
+
+  const cacheKey = trimmed.toLowerCase();
+  if (geocodeCache.has(cacheKey)) {
+    return geocodeCache.get(cacheKey)!;
+  }
+
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(trimmed)}.json?limit=1&language=fr&access_token=${MAPBOX_TOKEN}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const feat = json?.features?.[0];
+    if (!feat || !feat.center) return null;
+
+    const coords = { lng: feat.center[0], lat: feat.center[1] };
+    geocodeCache.set(cacheKey, coords);
+    return coords;
+  } catch {
+    return null;
+  }
+}
+
+function distanceBetween(a: Coords, b: Coords): number {
+  const R = 6371;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const lng1 = (a.lng * Math.PI) / 180;
+  const lng2 = (b.lng * Math.PI) / 180;
+  const dlat = lat2 - lat1;
+  const dlng = lng2 - lng1;
+  const sinLat = Math.sin(dlat / 2);
+  const sinLng = Math.sin(dlng / 2);
+  const c = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  return R * 2 * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
 }
 
 function formatETA(sec: number): string {
@@ -777,6 +1186,7 @@ const styles = StyleSheet.create({
   suggestBox: { backgroundColor: Colors.card, borderRadius: 12, marginTop: 8, overflow: "hidden" },
   suggestItem: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
   suggestText: { color: Colors.text },
+  loopSummary: { color: Colors.textSecondary, marginTop: 8, fontStyle: "italic" },
   ctaBar: { padding: 20 },
   primaryBtn: {
     backgroundColor: Colors.accent,
@@ -821,6 +1231,13 @@ const styles = StyleSheet.create({
   liveTitle: { color: Colors.text, fontSize: 20, fontWeight: "700" },
   liveSubtitle: { color: Colors.textSecondary, fontSize: 14 },
   mapContainer: { flex: 1, borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#0f172a" },
+  mapFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#050b19",
+  },
+  mapFallbackText: { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: 20 },
   liveOverlay: {
     position: "absolute",
     right: 16,
@@ -903,6 +1320,7 @@ const styles = StyleSheet.create({
   footerLabel: { color: Colors.textSecondary, fontSize: 12 },
   footerValue: { color: Colors.text, fontSize: 16, fontWeight: "600" },
   errorText: { color: "#ff6b6b" },
+  errorTextSmall: { color: "#ff6b6b", fontSize: 12 },
   secondaryBtn: {
     borderWidth: 1,
     borderColor: Colors.accent,
@@ -943,4 +1361,67 @@ const styles = StyleSheet.create({
   },
   scanHintText: { color: Colors.text, fontWeight: "600" },
   scanFooter: { paddingVertical: 16, alignItems: "center", gap: 8 },
+  loopModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  loopModalCard: {
+    backgroundColor: Colors.card,
+    padding: 20,
+    borderRadius: 16,
+    width: "100%",
+    gap: 12,
+  },
+  loopTitle: { color: Colors.text, fontSize: 18, fontWeight: "700" },
+  loopSubtitle: { color: Colors.textSecondary, fontSize: 14 },
+  loopPickerWrapper: {
+    width: "100%",
+    marginTop: 8,
+    position: "relative",
+    height: LOOP_PICKER_HEIGHT,
+  },
+  loopPicker: { flexDirection: "row", flex: 1, gap: 16, paddingHorizontal: 8 },
+  loopPickerHighlight: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    top: LOOP_PICKER_PADDING,
+    height: LOOP_PICKER_ITEM_HEIGHT,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(68, 222, 172, 0.08)",
+  },
+  loopPickerColumn: { flex: 1, alignItems: "center" },
+  loopPickerItem: {
+    height: LOOP_PICKER_ITEM_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loopPickerValue: { color: Colors.textSecondary, fontSize: 30, fontWeight: "600" },
+  loopPickerValueActive: { color: Colors.accent, fontSize: 36, fontWeight: "700" },
+  loopPickerUnit: {
+    color: Colors.textSecondary,
+    marginTop: 8,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  loopHint: { color: Colors.textSecondary, textAlign: "center" },
+  loopActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12 },
+  loopCancel: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  loopCancelText: { color: Colors.textSecondary },
+  loopConfirm: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  loopConfirmText: { color: Colors.background, fontWeight: "700" },
 });

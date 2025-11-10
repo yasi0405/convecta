@@ -2,8 +2,9 @@ import ParcelCard from "@features/receiver/pending/components/ParcelCard";
 import QRModal from "@features/receiver/pending/components/QRModal";
 import { usePendingParcels } from "@features/receiver/pending/hooks/usePendingParcels";
 import { styles } from "@features/receiver/pending/styles";
-import React from "react";
-import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import Colors from "@/theme/Colors";
+import React, { useCallback } from "react";
+import { RefreshControl, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 export default function PendingScreen() {
   const {
@@ -19,49 +20,66 @@ export default function PendingScreen() {
     qrValue,
     qrParcel,
     insets,
+    showQrForParcel,
+    qrLoading,
   } = usePendingParcels();
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Colis en attente</Text>
-      {myPendingParcels.length === 0 ? (
-        <Text style={styles.cardText}>
-          {loadingMyPending ? "Chargement..." : "Aucun colis en attente."}
-        </Text>
-      ) : (
-        <>
-          <FlatList
-            data={myPendingParcels}
-            keyExtractor={(item, index) => (item as any)?.id ?? `pending-${index}`}
-            renderItem={({ item }) => <ParcelCard parcel={item} mode="pending" />}
-          />
-          <TouchableOpacity style={styles.button} onPress={loadMyPendingParcels}>
-            <Text style={styles.buttonText}>
-              {loadingMyPending ? "Chargement…" : "Rafraîchir les colis en attente"}
-            </Text>
-          </TouchableOpacity>
-        </>
-      )}
+  const refreshing = loadingMyPending || loadingTaken;
+  const refreshAll = useCallback(() => {
+    loadMyPendingParcels();
+    loadTakenParcels();
+  }, [loadMyPendingParcels, loadTakenParcels]);
 
-      <Text style={[styles.title, { marginTop: 28 }]}>Colis pris en charge</Text>
-      {takenParcels.length === 0 ? (
-        <Text style={styles.cardText}>
-          {loadingTaken ? "Chargement..." : "Aucun colis pris en charge pour le moment."}
-        </Text>
-      ) : (
-        <>
-          <FlatList
-            data={takenParcels}
-            keyExtractor={(item, index) => (item as any)?.id ?? `taken-${index}`}
-            renderItem={({ item }) => <ParcelCard parcel={item} mode="taken" />}
-          />
-          <TouchableOpacity style={styles.button} onPress={loadTakenParcels}>
-            <Text style={styles.buttonText}>
-              {loadingTaken ? "Chargement…" : "Rafraîchir les colis pris en charge"}
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={Colors.accent} />
+        }
+      >
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.title}>Colis en attente</Text>
+            <Text style={styles.sectionMeta}>{myPendingParcels.length} colis</Text>
+          </View>
+          {myPendingParcels.length === 0 ? (
+            <Text style={styles.cardText}>
+              {loadingMyPending ? "Chargement..." : "Aucun colis en attente."}
             </Text>
-          </TouchableOpacity>
-        </>
-      )}
+          ) : (
+            <View style={styles.cardList}>
+              {myPendingParcels.map((parcel) => (
+                <ParcelCard key={(parcel as any)?.id} parcel={parcel} mode="pending" />
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.title}>Colis pris en charge</Text>
+            <Text style={styles.sectionMeta}>{takenParcels.length} colis</Text>
+          </View>
+          {takenParcels.length === 0 ? (
+            <Text style={styles.cardText}>
+              {loadingTaken ? "Chargement..." : "Aucun colis pris en charge pour le moment."}
+            </Text>
+          ) : (
+            <View style={styles.cardList}>
+              {takenParcels.map((parcel) => (
+                <ParcelCard
+                  key={(parcel as any)?.id}
+                  parcel={parcel}
+                  mode="taken"
+                  onShowQr={showQrForParcel}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
 
       <QRModal
         visible={qrVisible}
@@ -69,8 +87,9 @@ export default function PendingScreen() {
         qrError={qrError}
         qrValue={qrValue}
         qrParcel={qrParcel}
+        qrLoading={qrLoading}
         insets={insets}
       />
-    </View>
+    </SafeAreaView>
   );
 }
