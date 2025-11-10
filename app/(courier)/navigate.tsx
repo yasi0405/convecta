@@ -1,12 +1,13 @@
 // app/(courier)/navigate.tsx
-import Colors from "@/theme/Colors";
-import { useAddressAutocomplete } from "@/features/receiver/home/hooks/useAddressAutocomplete";
 import type { Schema } from "@/amplify/data/resource";
-import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useAddressAutocomplete } from "@/features/receiver/home/hooks/useAddressAutocomplete";
+import Colors from "@/theme/Colors";
 import MapboxGL from "@rnmapbox/maps";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Location from "expo-location";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,7 +24,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 const HAS_MAPBOX = Platform.OS === "ios" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
