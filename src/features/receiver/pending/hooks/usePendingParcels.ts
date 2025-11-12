@@ -1,10 +1,30 @@
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ParcelWithAssign } from "../types";
 
 const client = generateClient<any>();
+
+export const PENDING_FILTERS = [
+  { key: "ALL", label: "Tous" },
+  { key: "AVAILABLE", label: "Disponibles" },
+  { key: "TAKEN", label: "Pris en charge" },
+] as const;
+
+export type PendingFilterKey = (typeof PENDING_FILTERS)[number]["key"];
+
+type PendingFilter = {
+  key: PendingFilterKey;
+  label: string;
+  data: ParcelListItem[];
+  count: number;
+};
+
+export type ParcelListItem = {
+  parcel: ParcelWithAssign;
+  mode: "pending" | "taken";
+};
 
 export function usePendingParcels() {
   const insets = useSafeAreaInsets();
@@ -129,13 +149,30 @@ export function usePendingParcels() {
     []
   );
 
+  const filters: PendingFilter[] = useMemo(() => {
+    const pendingItems: ParcelListItem[] = myPendingParcels.map((parcel) => ({ parcel, mode: "pending" }));
+    const takenItems: ParcelListItem[] = takenParcels.map((parcel) => ({ parcel, mode: "taken" }));
+    const map = {
+      ALL: [...pendingItems, ...takenItems],
+      AVAILABLE: pendingItems,
+      TAKEN: takenItems,
+    } as const;
+    return PENDING_FILTERS.map((filter) => {
+      const data = map[filter.key];
+      return { ...filter, data, count: data.length };
+    });
+  }, [myPendingParcels, takenParcels]);
+
+  const loading = loadingMyPending || loadingTaken;
+  const reloadAll = useCallback(() => {
+    loadMyPendingParcels();
+    loadTakenParcels();
+  }, [loadMyPendingParcels, loadTakenParcels]);
+
   return {
-    myPendingParcels,
-    takenParcels,
-    loadMyPendingParcels,
-    loadTakenParcels,
-    loadingMyPending,
-    loadingTaken,
+    filters,
+    loading,
+    reloadAll,
     qrVisible,
     setQrVisible,
     qrValue,

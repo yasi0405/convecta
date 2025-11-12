@@ -3,7 +3,7 @@ import type { Parcel } from '../types.js';
 // NOTE: branchement Amplify à réaliser ici quand ton schéma est prêt.
 // Pour l’instant, on renvoie des données mockées pour débloquer l’écran.
 
-export async function listIncomingParcels(): Promise<Parcel[]> {
+async function mockIncomingParcels(): Promise<Parcel[]> {
   await new Promise((r) => setTimeout(r, 250));
   const now = new Date();
   const start = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
@@ -43,6 +43,19 @@ export async function listIncomingParcels(): Promise<Parcel[]> {
       createdAtISO: new Date().toISOString(),
     },
   ];
+}
+
+export async function listIncomingParcels(): Promise<Parcel[]> {
+  return mockIncomingParcels();
+}
+
+export async function getIncomingParcel(id: string): Promise<Parcel> {
+  const parcels = await mockIncomingParcels();
+  const parcel = parcels.find((p) => p.id === id);
+  if (!parcel) {
+    throw new Error('Colis introuvable');
+  }
+  return parcel;
 }
 
 export async function confirmReceptionWindow(

@@ -3,6 +3,23 @@ import { useCallback, useMemo, useState } from 'react';
 import { listIncomingParcels } from '../services/parcels';
 import type { Parcel } from '../types';
 
+export const INCOMING_FILTERS = [
+  { key: 'ALL', label: 'Toutes' },
+  { key: 'AWAITING_RECEIVER_CONFIRMATION', label: 'À confirmer', status: 'AWAITING_RECEIVER_CONFIRMATION' },
+  { key: 'AWAITING_PICKUP', label: 'Confirmés (en attente de prise en charge)', status: 'AWAITING_PICKUP' },
+  { key: 'IN_TRANSIT', label: 'En cours de livraison', status: 'IN_TRANSIT' },
+] as const;
+
+export type IncomingFilterKey = (typeof INCOMING_FILTERS)[number]['key'];
+
+type IncomingFilter = {
+  key: IncomingFilterKey;
+  label: string;
+  status?: Parcel['status'];
+  data: Parcel[];
+  count: number;
+};
+
 export function useIncomingParcels() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Parcel[]>([]);
@@ -23,18 +40,12 @@ export function useIncomingParcels() {
     }, [reload])
   );
 
-  const sections = useMemo(() => {
-    const awaitingConfirm = items.filter((p) => p.status === 'AWAITING_RECEIVER_CONFIRMATION');
-    const awaitingPickup = items.filter((p) => p.status === 'AWAITING_PICKUP');
-    const inTransit = items.filter((p) => p.status === 'IN_TRANSIT');
-    const delivered = items.filter((p) => p.status === 'DELIVERED');
-    return [
-      { key: 'AWAITING_RECEIVER_CONFIRMATION', title: 'À confirmer', data: awaitingConfirm },
-      { key: 'AWAITING_PICKUP', title: 'Confirmés (en attente de prise en charge)', data: awaitingPickup },
-      { key: 'IN_TRANSIT', title: 'En cours de livraison', data: inTransit },
-      { key: 'DELIVERED', title: 'Livrés', data: delivered },
-    ].filter((s) => s.data.length > 0);
+  const filters: IncomingFilter[] = useMemo(() => {
+    return INCOMING_FILTERS.map((filter) => {
+      const data = filter.status ? items.filter((p) => p.status === filter.status) : items;
+      return { ...filter, data, count: data.length };
+    });
   }, [items]);
 
-  return { loading, sections, reload };
+  return { loading, filters, reload };
 }

@@ -25,7 +25,7 @@ export default function ParcelCard({
         <StatusPill status={parcel.status} />
       </View>
 
-      <View style={{ marginTop: 8, gap: 8 }}>
+      <View style={styles.infoStack}>
         <InfoRow icon="person.fill" text={parcel.senderName} />
         <InfoRow icon="cube.box.fill" text={parcel.pickupAddressLabel} />
         <InfoRow icon="house.fill" text={parcel.dropoffAddressLabel} />
@@ -42,7 +42,7 @@ export default function ParcelCard({
 
       <View style={styles.actions}>
         <TouchableOpacity onPress={onOpenDetails} style={[styles.btn, styles.btnGhost]}>
-          <Text>Détails</Text>
+          <Text style={styles.btnGhostLabel}>Détails</Text>
         </TouchableOpacity>
         {showConfirm && (
           <TouchableOpacity onPress={() => setConfirmOpen(true)} style={[styles.btn, styles.btnPrimary]}>
@@ -87,19 +87,23 @@ function InfoRow({ icon, text }: { icon: React.ComponentProps<typeof IconSymbol>
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: '#fff',
-    elevation: 2,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 12,
+    marginBottom: 16,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  infoStack: { marginTop: 4, gap: 8 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoText: { color: Colors.text, flex: 1 },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 12, justifyContent: 'flex-end' },
-  btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
-  btnPrimary: { backgroundColor: '#0a84ff' },
-  btnLabel: { color: '#fff', fontWeight: '700' },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#d0d5dd' },
+  actions: { flexDirection: 'row', gap: 12, marginTop: 12, justifyContent: 'flex-end' },
+  btn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  btnPrimary: { backgroundColor: Colors.button },
+  btnLabel: { color: Colors.buttonText, fontWeight: '700' },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.border },
+  btnGhostLabel: { color: Colors.text, fontWeight: '600' },
 });

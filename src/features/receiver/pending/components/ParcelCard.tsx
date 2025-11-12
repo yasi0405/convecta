@@ -1,9 +1,8 @@
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { handleEditParcel } from "../services/parcels";
-import { styles } from "../styles";
 import { ParcelWithAssign } from "../types";
 
 export default function ParcelCard({
@@ -16,9 +15,10 @@ export default function ParcelCard({
   onShowQr?: (parcel: ParcelWithAssign) => void;
 }) {
   const fmt = (v?: string | number | null) => (v == null || v === "" ? "—" : String(v));
-  const fmtKg = (v?: number | string | null) => (v ? `${v} kg` : "—");
   const statusFR = (s?: ParcelWithAssign["status"]) =>
-    s === "ASSIGNED"
+    s === "AVAILABLE"
+      ? "Disponible"
+      : s === "ASSIGNED"
       ? "Assigné"
       : s === "IN_PROGRESS"
       ? "En cours"
@@ -26,28 +26,80 @@ export default function ParcelCard({
       ? "En livraison"
       : s === "DELIVERED"
       ? "Livré"
-      : s ?? "—";
+      : s === "CANCELLED"
+      ? "Annulé"
+      : "—";
 
   return (
     <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <View style={styles.cardTitleRow}>
-          <IconSymbol name="cube.box.fill" size={18} color={Colors.accent} />
-          <Text style={styles.cardTitleText}>{fmt(parcel.type ?? "Colis")}</Text>
+      <View style={styles.header}>
+        <Text style={styles.cardTitle}>{fmt(parcel.type ?? parcel.id ?? "Colis")}</Text>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusText}>{statusFR(parcel.status)}</Text>
         </View>
+      </View>
+
+      <View style={styles.infoStack}>
+        <InfoRow icon="mappin.and.ellipse" label="Départ" value={parcel.adresseDepart} />
+        <InfoRow icon="house.fill" label="Arrivée" value={parcel.adresseArrivee} />
+        <InfoRow icon="cube.box.fill" label="Type" value={parcel.type} />
+      </View>
+
+      <View style={styles.actions}>
         {mode === "pending" ? (
-          <TouchableOpacity style={styles.editButton} onPress={() => handleEditParcel(parcel)}>
-            <Text style={styles.editButtonText}>Modifier</Text>
+          <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => handleEditParcel(parcel)}>
+            <Text style={styles.btnGhostLabel}>Modifier</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.qrButton} onPress={() => onShowQr?.(parcel)}>
-            <Text style={styles.qrButtonText}>Valider (QR)</Text>
+          <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => onShowQr?.(parcel)}>
+            <Text style={styles.btnPrimaryLabel}>Valider (QR)</Text>
           </TouchableOpacity>
         )}
       </View>
-      {parcel.adresseDepart ? <Text style={styles.cardText}>Départ : {fmt(parcel.adresseDepart)}</Text> : null}
-      {parcel.adresseArrivee ? <Text style={styles.cardText}>Arrivée : {fmt(parcel.adresseArrivee)}</Text> : null}
-      <Text style={styles.badge}>Statut : {statusFR(parcel.status)}</Text>
     </View>
   );
 }
+
+function InfoRow({ icon, label, value }: { icon: React.ComponentProps<typeof IconSymbol>["name"]; label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <View style={styles.infoRow}>
+      <IconSymbol name={icon} size={16} color={Colors.accent} />
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoText}>{value}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 12,
+    marginBottom: 16,
+  },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  statusText: { color: Colors.textSecondary, fontSize: 13, fontWeight: "600" },
+  infoStack: { gap: 8 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  infoLabel: { color: Colors.textSecondary, fontSize: 13 },
+  infoText: { color: Colors.text, flex: 1 },
+  actions: { flexDirection: "row", justifyContent: "flex-end" },
+  btn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999 },
+  btnGhost: { borderWidth: 1, borderColor: Colors.border },
+  btnGhostLabel: { color: Colors.text, fontWeight: "600" },
+  btnPrimary: { backgroundColor: Colors.button },
+  btnPrimaryLabel: { color: Colors.buttonText, fontWeight: "700" },
+});
