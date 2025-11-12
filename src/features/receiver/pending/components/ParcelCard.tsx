@@ -1,5 +1,7 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { handleEditParcel } from "../services/parcels";
 import { styles } from "../styles";
 import { ParcelWithAssign } from "../types";
@@ -29,7 +31,10 @@ export default function ParcelCard({
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.cardTitle}>📦 {fmt(parcel.type ?? "Colis")}</Text>
+        <View style={styles.cardTitleRow}>
+          <IconSymbol name="cube.box.fill" size={18} color={Colors.accent} />
+          <Text style={styles.cardTitleText}>{fmt(parcel.type ?? "Colis")}</Text>
+        </View>
         {mode === "pending" ? (
           <TouchableOpacity style={styles.editButton} onPress={() => handleEditParcel(parcel)}>
             <Text style={styles.editButtonText}>Modifier</Text>

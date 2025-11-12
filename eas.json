@@ -17,14 +17,18 @@
         "simulator": false
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
-      "env": {
-      },
+      "env": {},
       "channel": "main"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./convecta-dev-cafd8809e6a4.json",
+        "track": "internal"
+      }
+    }
   }
 }

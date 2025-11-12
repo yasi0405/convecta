@@ -1,6 +1,7 @@
 // app/home/onboarding.tsx
 import { createReferralInvite, findUserByPhone, getCurrentUserId, getOrCreateProfile, updateProfile, uploadKycImage } from "@/features/user/api";
 import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -546,7 +547,7 @@ export default function Onboarding() {
                 <Text style={{ color: Colors.text, fontWeight: "600", flex: 1 }}>Adresse {idx + 1}</Text>
                 {idx > 0 && (
                   <TouchableOpacity onPress={() => setAddresses((prev) => prev.filter((_, i) => i !== idx))} accessibilityLabel={`Supprimer l'adresse ${idx + 1}`}>
-                    <Text style={{ color: Colors.text, fontSize: 18 }}>🗑️</Text>
+                    <IconSymbol name="trash.fill" size={18} color={Colors.accent} />
                   </TouchableOpacity>
                 )}
               </HStack>
@@ -572,7 +573,7 @@ export default function Onboarding() {
 
           {addresses.length < 3 && (
             <TouchableOpacity onPress={() => setAddresses((prev) => [...prev, { street: "", postalCode: "", city: "", country: "" }])} accessibilityLabel="Ajouter une adresse" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ color: Colors.accent, fontSize: 22 }}>➕</Text>
+              <IconSymbol name="plus.circle.fill" size={22} color={Colors.accent} />
               <Text style={{ color: Colors.text }}>Ajouter une adresse (max 3)</Text>
             </TouchableOpacity>
           )}
@@ -597,14 +598,14 @@ export default function Onboarding() {
 
               {idx > 0 && (
                 <TouchableOpacity onPress={() => setContacts((prev) => prev.filter((_, i) => i !== idx))} accessibilityLabel="Supprimer ce référent">
-                  <Text style={{ color: Colors.text, fontSize: 22 }}>🗑️</Text>
+                  <IconSymbol name="trash.fill" size={20} color={Colors.accent} />
                 </TouchableOpacity>
               )}
             </Card>
           ))}
 
           <TouchableOpacity onPress={() => setContacts((prev) => [...prev, { name: "", phone: "" }])} accessibilityLabel="Ajouter un référent" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ color: Colors.accent, fontSize: 22 }}>➕</Text>
+            <IconSymbol name="plus.circle.fill" size={22} color={Colors.accent} />
             <Text style={{ color: Colors.text }}>Ajouter une personne de contact</Text>
           </TouchableOpacity>
 

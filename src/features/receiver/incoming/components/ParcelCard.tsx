@@ -1,3 +1,5 @@
+import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { Parcel } from '../types';
@@ -23,14 +25,19 @@ export default function ParcelCard({
         <StatusPill status={parcel.status} />
       </View>
 
-      <View style={{ marginTop: 8, gap: 4 }}>
-        <Text>🧍‍♀️ {parcel.senderName}</Text>
-        {parcel.pickupAddressLabel && <Text>📦 {parcel.pickupAddressLabel}</Text>}
-        {parcel.dropoffAddressLabel && <Text>🏠 {parcel.dropoffAddressLabel}</Text>}
-        {parcel.etaText ? <Text>⏱️ {parcel.etaText}</Text> : null}
-        {parcel.proposedWindow ? (
-          <Text>🗓️ {fmtRange(parcel.proposedWindow.startISO, parcel.proposedWindow.endISO)}</Text>
-        ) : null}
+      <View style={{ marginTop: 8, gap: 8 }}>
+        <InfoRow icon="person.fill" text={parcel.senderName} />
+        <InfoRow icon="cube.box.fill" text={parcel.pickupAddressLabel} />
+        <InfoRow icon="house.fill" text={parcel.dropoffAddressLabel} />
+        <InfoRow icon="timer" text={parcel.etaText} />
+        <InfoRow
+          icon="calendar"
+          text={
+            parcel.proposedWindow
+              ? fmtRange(parcel.proposedWindow.startISO, parcel.proposedWindow.endISO)
+              : undefined
+          }
+        />
       </View>
 
       <View style={styles.actions}>
@@ -68,6 +75,16 @@ function fmtRange(startISO?: string, endISO?: string) {
   return `${s.toLocaleString()} → ${e.toLocaleTimeString()}`;
 }
 
+function InfoRow({ icon, text }: { icon: React.ComponentProps<typeof IconSymbol>["name"]; text?: string | null }) {
+  if (!text) return null;
+  return (
+    <View style={styles.infoRow}>
+      <IconSymbol name={icon} size={18} color={Colors.accent} />
+      <Text style={styles.infoText}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
@@ -77,7 +94,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoText: { color: Colors.text, flex: 1 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12, justifyContent: 'flex-end' },
   btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
   btnPrimary: { backgroundColor: '#0a84ff' },

@@ -1,7 +1,7 @@
 // app/(courier)/navigate.tsx
 import type { Schema } from "@/amplify/data/resource";
-import { useAddressAutocomplete } from "@/features/receiver/home/hooks/useAddressAutocomplete";
 import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import MapboxGL from "@rnmapbox/maps";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
@@ -20,7 +20,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -31,12 +30,38 @@ if (HAS_MAPBOX && MAPBOX_TOKEN) {
   MapboxGL.setAccessToken(MAPBOX_TOKEN);
 }
 const client = generateClient<Schema>();
+const AVERAGE_SPEED_KMH = 35;
+const SPEED_MPS = (AVERAGE_SPEED_KMH * 1000) / 3600;
 
 const DESTINATIONS: Destination[] = [
-  { id: "brussels", label: "Bruxelles", missions: "15 missions disponibles", query: "Bruxelles, Belgique" },
-  { id: "lille", label: "Lille", missions: "8 missions disponibles", query: "Lille, France" },
-  { id: "charleroi", label: "Charleroi", missions: "3 livraisons express", query: "Charleroi, Belgique" },
-  { id: "loop", label: "Pas de destination précise", missions: "Je me laisse guider", query: "" },
+  {
+    id: "brussels",
+    label: "Bruxelles",
+    missions: "15 missions disponibles",
+    query: "Bruxelles, Belgique",
+    coords: { lat: 50.8503, lng: 4.3517 },
+  },
+  {
+    id: "lille",
+    label: "Lille",
+    missions: "8 missions disponibles",
+    query: "Lille, France",
+    coords: { lat: 50.6292, lng: 3.0573 },
+  },
+  {
+    id: "charleroi",
+    label: "Charleroi",
+    missions: "3 livraisons express",
+    query: "Charleroi, Belgique",
+    coords: { lat: 50.4108, lng: 4.4446 },
+  },
+  {
+    id: "loop",
+    label: "Pas de destination précise",
+    missions: "Je me laisse guider",
+    query: "",
+    coords: null,
+  },
 ] as const;
 
 const OFFER_PRESETS = [
@@ -89,16 +114,17 @@ type Destination = {
   label: string;
   missions: string;
   query: string;
+  coords?: Coords | null;
 };
 type Offer = typeof OFFER_PRESETS[number];
 type Coords = { lat: number; lng: number };
 
 type Step = { instruction: string; distance: number; duration: number };
 
-const geocodeCache = new Map<string, Coords>();
-
 const extractParcels = (payload: any): any[] => {
   if (!payload) return [];
+  if (Array.isArray(payload)) return payload.filter(Boolean);
+  if (Array.isArray(payload?.data)) return payload.data.filter(Boolean);
   const candidate =
     payload?.data?.listParcels?.items ??
     payload?.listParcels?.items ??
@@ -115,8 +141,6 @@ export default function CourierNavigate() {
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [destLabel, setDestLabel] = useState<string | null>(null);
   const [destAddress, setDestAddress] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const { suggestions, setSuggestions } = useAddressAutocomplete(searchQuery);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,12 +160,15 @@ export default function CourierNavigate() {
   const [pauseActive, setPauseActive] = useState(false);
   const [pauseRemaining, setPauseRemaining] = useState<number | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-const [stopPickerOpen, setStopPickerOpen] = useState(false);
-const [stopReason, setStopReason] = useState<string | null>(null);
-const [autoAssignLoading, setAutoAssignLoading] = useState(false);
-const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
-const [autoAssignedParcel, setAutoAssignedParcel] = useState<{ id: string; label: string } | null>(null);
-const [courierId, setCourierId] = useState<string | null>(null);
+  const [stopPickerOpen, setStopPickerOpen] = useState(false);
+  const [stopReason, setStopReason] = useState<string | null>(null);
+  const [autoAssignLoading, setAutoAssignLoading] = useState(false);
+  const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
+  const [autoAssignedParcel, setAutoAssignedParcel] = useState<{ id: string; label: string; type?: string | null } | null>(null);
+  const [courierId, setCourierId] = useState<string | null>(null);
+  const [startConfirmVisible, setStartConfirmVisible] = useState(false);
+  const startConfirmDurationRef = useRef<number | null>(null);
+  const [liveTicker, setLiveTicker] = useState(0);
   const [loopModalVisible, setLoopModalVisible] = useState(false);
   const [loopDuration, setLoopDuration] = useState<number | null>(null);
   const [loopSelection, setLoopSelection] = useState<number>(60);
@@ -215,6 +242,8 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     setPauseActive(false);
     setPauseRemaining(null);
     setStopReason(null);
+    setStopPickerOpen(false);
+    setLiveTicker(0);
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
@@ -227,6 +256,13 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     setSelectedOffer(null);
     setDestLabel(null);
     setDestAddress(null);
+    setStartConfirmVisible(false);
+    startConfirmDurationRef.current = null;
+  };
+
+  const handleAutoAssignDismiss = () => {
+    setAutoAssignError(null);
+    goBackToDest();
   };
 
   const handleAcceptOffer = () => {
@@ -235,7 +271,8 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
       openLoopModal("toLive");
       return;
     }
-    startLiveNavigation();
+    const durationOverride = selectedDestination.id === "loop" ? loopDuration ?? loopSelection : undefined;
+    requestStartConfirmation(durationOverride);
   };
 
   // 1. Locate courier whenever stage=live
@@ -264,56 +301,41 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     };
   }, [stage]);
 
-  // 2. Geocode destination (non loop)
+  useEffect(() => {
+    if (stage !== "live") {
+      setLiveTicker(0);
+      return;
+    }
+    setLiveTicker(0);
+    const interval = setInterval(() => {
+      setLiveTicker((tick) => tick + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [stage]);
+
+  // 2. Set destination coordinates without web fetch
   useEffect(() => {
     if (stage !== "live") return;
-    if (!destAddress) return;
-    if (selectedDestination?.id === "loop") return;
-    let mounted = true;
-    (async () => {
-      if (!MAPBOX_TOKEN) {
-        setError("Clé Mapbox absente (EXPO_PUBLIC_MAPBOX_TOKEN).");
-        return;
-      }
-      try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-          destAddress
-        )}.json?limit=1&language=fr&access_token=${MAPBOX_TOKEN}`;
-        const res = await fetch(url);
-        const json = await res.json();
-        const feat = json?.features?.[0];
-        if (!feat) throw new Error("Adresse introuvable.");
-        const [lng, lat] = feat.center;
-        if (!mounted) return;
-        setTarget({ lat, lng });
-      } catch (e: any) {
-        setError(e?.message ?? "Échec du géocodage.");
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [stage, destAddress, selectedDestination]);
+    if (!selectedDestination) return;
+    if (selectedDestination.id === "loop") {
+      if (origin) setTarget(origin);
+      return;
+    }
+    if (selectedDestination.coords) {
+      setTarget(selectedDestination.coords);
+      setError(null);
+      return;
+    }
+    setTarget(null);
+    setError("Destination indisponible sans coordonnées pré-configurées.");
+  }, [stage, selectedDestination, origin]);
 
-  // Keep target synced with origin for loop trips
+  // 3. Directions polling (local estimation only)
   useEffect(() => {
-    if (stage !== "live") return;
-    if (selectedDestination?.id !== "loop") return;
-    if (!origin) return;
-    setTarget((prev) => {
-      if (prev && Math.abs(prev.lat - origin.lat) < 1e-5 && Math.abs(prev.lng - origin.lng) < 1e-5) {
-        return prev;
-      }
-      return origin;
-    });
-  }, [stage, origin, selectedDestination]);
-
-  // 3. Directions polling
-  useEffect(() => {
-    if (stage !== "live" || !MAPBOX_TOKEN || !target) return;
+    if (stage !== "live" || !target) return;
     let cancelled = false;
 
-    const fetchRoute = async () => {
+    const updateRoute = async () => {
       try {
         let current: Coords | null = null;
         try {
@@ -324,43 +346,34 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
           if (last) current = { lat: last.coords.latitude, lng: last.coords.longitude };
         }
         if (!current && origin) current = origin;
-        if (!current) return;
-        if (cancelled) return;
+        if (!current || cancelled) return;
+
         setOrigin(current);
+        setRouteCoords([
+          [current.lng, current.lat],
+          [target.lng, target.lat],
+        ]);
 
-        const url =
-          `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/` +
-          `${current.lng},${current.lat};${target.lng},${target.lat}` +
-          `?alternatives=false&geometries=geojson&overview=full&steps=true&language=fr&access_token=${MAPBOX_TOKEN}`;
-        const res = await fetch(url);
-        const json = await res.json();
-        const route = json?.routes?.[0];
-        if (!route) throw new Error("Aucun itinéraire trouvé.");
-        if (cancelled) return;
+        const distKm = distanceBetween(current, target);
+        const meters = Math.max(0, Math.round(distKm * 1000));
+        const etaSeconds = Math.max(0, Math.round((distKm / AVERAGE_SPEED_KMH) * 3600));
 
-        setEtaSec(Math.max(0, Math.round(route.duration)));
-        setRemainMeters(Math.max(0, Math.round(route.distance)));
-        const coords: [number, number][] = route.geometry?.coordinates ?? [];
-        setRouteCoords(coords);
-        const firstLeg = route.legs?.[0];
-        const step = firstLeg?.steps?.[0];
-        setNextStep(
-          step
-            ? {
-                instruction: step.maneuver?.instruction ?? "Continuer",
-                distance: step.distance ?? 0,
-                duration: step.duration ?? 0,
-              }
-            : null
-        );
+        setRemainMeters(meters);
+        setEtaSec(etaSeconds);
+        setNextStep({
+          instruction: meters < 200 ? "Arrivée imminente" : "Continuer vers la destination",
+          distance: meters,
+          duration: etaSeconds,
+        });
+        setLiveTicker(0);
       } catch (e) {
-        console.log("fetchRoute error:", e);
+        console.log("updateRoute error:", e);
       }
     };
 
-    fetchRoute();
+    updateRoute();
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(fetchRoute, 15000);
+    pollRef.current = setInterval(updateRoute, 15000);
 
     return () => {
       cancelled = true;
@@ -371,8 +384,12 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     };
   }, [stage, target]);
 
-  const etaText = etaSec != null ? formatETA(etaSec) : "—";
-  const distText = remainMeters != null ? formatKm(remainMeters) : "—";
+  const elapsedSinceRoute = stage === "live" ? liveTicker : 0;
+  const liveEtaSec = etaSec != null ? Math.max(0, etaSec - elapsedSinceRoute) : null;
+  const liveDistMeters =
+    remainMeters != null ? Math.max(0, remainMeters - SPEED_MPS * elapsedSinceRoute) : null;
+  const etaText = liveEtaSec != null ? formatETA(liveEtaSec) : "—";
+  const distText = liveDistMeters != null ? formatKm(liveDistMeters) : "—";
 
   useEffect(() => {
     if (!pauseActive) {
@@ -445,34 +462,21 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
       setAutoAssignError(null);
       setAutoAssignedParcel(null);
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") throw new Error("Permission localisation refusée.");
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const courierPos: Coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-
       const res = await client.models.Parcel.list({
         filter: { status: { eq: "AVAILABLE" } },
         limit: 30,
         authMode: "userPool",
       });
       const parcels = extractParcels(res);
+      const candidate = parcels.find((parcel: any) => parcel?.id);
 
-      let best: { parcel: any; dist: number } | null = null;
-      for (const parcel of parcels) {
-        if (!parcel?.adresseDepart) continue;
-        const coords = await geocodeAddress(parcel.adresseDepart);
-        if (!coords) continue;
-        const dist = distanceBetween(courierPos, coords);
-        if (!best || dist < best.dist) best = { parcel, dist };
-      }
-
-      if (!best || !best.parcel?.id) {
+      if (!candidate?.id) {
         setAutoAssignError("Aucun colis compatible trouvé pour ce trajet.");
         return;
       }
 
       await client.models.Parcel.update({
-        id: best.parcel.id,
+        id: candidate.id,
         status: "ASSIGNED",
         assignedTo: courierId,
         updatedAt: new Date().toISOString(),
@@ -480,8 +484,9 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
       });
 
       setAutoAssignedParcel({
-        id: best.parcel.id,
-        label: best.parcel.adresseDepart ?? destination.label,
+        id: candidate.id,
+        label: candidate.adresseDepart ?? destination.label,
+        type: candidate.type ?? null,
       });
     } catch (e) {
       setAutoAssignError("Impossible d'assigner automatiquement un colis.");
@@ -543,11 +548,30 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
       const durationValue = durationOverride ?? loopDuration ?? loopSelection;
       setDestAddress(formatLoopAddressLabel(durationValue));
     } else {
-      setDestAddress(selectedDestination.query);
+      setDestAddress(selectedDestination.query || selectedDestination.label);
     }
     setStage("live");
     autoAssignNearestParcel(selectedDestination);
   };
+
+  function requestStartConfirmation(durationOverride?: number) {
+    startConfirmDurationRef.current =
+      typeof durationOverride === "number" ? durationOverride : null;
+    setStartConfirmVisible(true);
+  }
+
+  function handleConfirmStart() {
+    const override =
+      typeof startConfirmDurationRef.current === "number" ? startConfirmDurationRef.current : undefined;
+    startConfirmDurationRef.current = null;
+    setStartConfirmVisible(false);
+    startLiveNavigation(override);
+  }
+
+  function handleRejectStart() {
+    startConfirmDurationRef.current = null;
+    setStartConfirmVisible(false);
+  }
 
   const handleLoopConfirm = () => {
     const rounded = Math.min(12 * 60, Math.max(15, loopSelection));
@@ -557,7 +581,7 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     if (loopIntentRef.current === "toOffer") {
       setStage("offer");
     } else if (loopIntentRef.current === "toLive") {
-      startLiveNavigation(rounded);
+      requestStartConfirmation(rounded);
     }
   };
 
@@ -614,11 +638,6 @@ useEffect(() => {
     return (
       <SafeAreaView style={styles.pickScreen}>
         <ScrollView contentContainerStyle={styles.heroContent}>
-          <View style={styles.exitRow}>
-            <TouchableOpacity onPress={() => router.replace("/")}>
-              <Text style={styles.backLink}>← Menu principal</Text>
-            </TouchableOpacity>
-          </View>
           <Text style={styles.heroTitle}>Où souhaitez-vous aller aujourd'hui ?</Text>
           <Text style={styles.heroSubtitle}>Convecta relie les routes, vous choisissez la direction.</Text>
           <View style={{ marginTop: 20, width: "100%", gap: 12 }}>
@@ -652,43 +671,9 @@ useEffect(() => {
           </View>
           <View style={{ width: "100%", marginTop: 24 }}>
             <Text style={styles.searchLabel}>Recherche personnalisée</Text>
-            <View style={styles.searchRow}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Adresse ou ville (Mapbox)"
-                placeholderTextColor={Colors.textSecondary}
-                value={searchQuery}
-                onChangeText={(t) => {
-                  setSearchQuery(t);
-                  if (!t.trim()) setSuggestions([]);
-                }}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-            {suggestions.length > 0 && (
-              <View style={styles.suggestBox}>
-                {suggestions.map((s) => (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={styles.suggestItem}
-                    onPress={() => {
-                      setSelectedDestination({
-                        id: s.id,
-                        label: s.label.split(",")[0] ?? s.label,
-                        missions: "Trajet personnalisé",
-                        query: s.label,
-                      });
-                      setSearchQuery(s.label);
-                      setSuggestions([]);
-                      closeLoopModal();
-                    }}
-                  >
-                    <Text style={styles.suggestText}>{s.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            <Text style={styles.searchDisabled}>
+              Indisponible : appels Mapbox réservés au SDK natif.
+            </Text>
             {selectedDestination?.id === "loop" && loopDuration && (
               <Text style={styles.loopSummary}>
                 Disponibilité définie : {formatDurationLabel(loopDuration)}
@@ -766,19 +751,36 @@ useEffect(() => {
     );
   };
 
-  const renderLiveStage = () => (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#030712" }}>
-      <View style={styles.liveHeader}>
-        <TouchableOpacity onPress={goBackToDest}>
-          <Text style={styles.backLink}>← Itinéraires</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.replace("/")}>
-          <Text style={styles.backLink}>Quitter</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.liveTitleWrap}>
-        <Text style={styles.liveTitle}>{destLabel}</Text>
-        <Text style={styles.liveSubtitle}>{selectedOffer?.title}</Text>
+  const renderLiveStage = () => {
+    const bonusValue =
+      autoAssignedParcel?.type?.toLowerCase() === "express" ? selectedOffer?.bonus ?? "" : "";
+    const nextDistance = nextStep?.distance ?? liveDistMeters ?? 0;
+    const nextDuration = nextStep?.duration ?? liveEtaSec ?? 0;
+    const nextStepSummary = `${formatKm(nextDistance)} · ${formatETA(nextDuration)}`;
+
+    return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#030712" }} edges={["top", "bottom"]}>
+      <View style={styles.liveInfoBar}>
+        <Text style={styles.liveInfoDestination}>{destLabel ?? "Destination inconnue"}</Text>
+        <Text style={styles.liveInfoStatus}>Trajet en cours</Text>
+        <View style={styles.liveInfoStats}>
+          <View style={styles.liveInfoStat}>
+            <Text style={styles.liveInfoLabel}>Heure d’arrivée</Text>
+            <Text style={styles.liveInfoValue}>{etaText}</Text>
+          </View>
+          <View style={styles.liveInfoStat}>
+            <Text style={styles.liveInfoLabel}>Distance restante</Text>
+            <Text style={styles.liveInfoValue}>{distText}</Text>
+          </View>
+          <View style={styles.liveInfoStat}>
+            <Text style={styles.liveInfoLabel}>Rémunération</Text>
+            <Text style={styles.liveInfoValue}>{selectedOffer?.hourly ?? "—"}</Text>
+          </View>
+          <View style={styles.liveInfoStat}>
+            <Text style={styles.liveInfoLabel}>Bonus estimé</Text>
+            <Text style={styles.liveInfoValue}>{bonusValue}</Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.mapContainer}>
@@ -825,124 +827,74 @@ useEffect(() => {
           </View>
         )}
 
-        <View style={styles.liveOverlay}>
-          <Text style={styles.overlayTitle}>{origin ? "Trajet en cours" : "Analyse écologique"}</Text>
-          <View style={styles.overlayRow}>
-            <Text style={styles.overlayLabel}>Heure d’arrivée</Text>
-            <Text style={styles.overlayValue}>{etaText}</Text>
-          </View>
-          <View style={styles.overlayRow}>
-            <Text style={styles.overlayLabel}>Distance restante</Text>
-            <Text style={styles.overlayValue}>{distText}</Text>
-          </View>
-          <View style={styles.overlayRow}>
-            <Text style={styles.overlayLabel}>Rémunération</Text>
-            <Text style={styles.overlayValue}>{selectedOffer?.hourly ?? "—"}</Text>
-          </View>
-          <View style={styles.overlayRow}>
-            <Text style={styles.overlayLabel}>Bonus estimé</Text>
-            <Text style={styles.overlayValue}>{selectedOffer?.bonus ?? "—"}</Text>
-          </View>
-          {nextStep && (
+        <View style={styles.liveControlsOverlay}>
           <Text style={styles.overlayHint}>
-            Prochaine étape : {nextStep.instruction} ({formatKm(nextStep.distance)} · {formatETA(nextStep.duration)})
+            Prochaine étape : Continuer vers la destination ({nextStepSummary})
           </Text>
-        )}
-        <TouchableOpacity style={styles.scanButton} onPress={handleOpenScanner}>
-            <Text style={styles.scanButtonIcon}>📷</Text>
-            <View>
-              <Text style={styles.scanButtonTitle}>
-                {liveStatus === "completed" ? "Colis validés" : "Scanner un colis"}
-              </Text>
-              <Text style={styles.scanButtonSubtitle}>
-                {liveStatus === "completed" ? "QR confirmé" : "Flasher pour confirmer"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <View style={styles.controlCard}>
-            <View style={styles.controlRow}>
-              <View>
-                <Text style={styles.controlTitle}>Pause éco</Text>
-                <Text style={styles.controlSubtitle}>
-                  {pauseActive ? `Temps restant ${formatPauseTimer()}` : "15 min maximum"}
-                </Text>
-              </View>
-              {pauseActive ? (
-                <TouchableOpacity style={styles.resumeBtn} onPress={handleResume}>
-                  <Text style={styles.resumeBtnText}>Continuer</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.pauseBtn, pauseActive && { opacity: 0.3 }]}
-                  onPress={handlePausePress}
-                  disabled={pauseActive}
-                >
-                  <Text style={styles.pauseBtnText}>Pause</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-          <View style={styles.controlCard}>
-            <Text style={styles.controlTitle}>Stop exceptionnel</Text>
+          <View style={styles.controlActionRow}>
             <TouchableOpacity
-              style={styles.dropdownControl}
-              onPress={() => setStopPickerOpen((prev) => !prev)}
+              style={styles.controlIconBtn}
+              onPress={handleOpenScanner}
+              accessibilityLabel="Scanner un colis"
             >
-              <Text style={styles.dropdownValue}>
-                {stopReason ?? "Sélectionner un motif"}
-              </Text>
-              <Text style={styles.dropdownCaret}>{stopPickerOpen ? "▲" : "▼"}</Text>
+              <IconSymbol name="qrcode.viewfinder" size={22} color={Colors.accent} />
             </TouchableOpacity>
-            {stopPickerOpen && (
-              <View style={styles.dropdownList}>
-                {STOP_REASONS.map((reason) => (
-                  <TouchableOpacity
-                    key={reason}
-                    style={styles.dropdownOption}
-                    onPress={() => {
-                      setStopReason(reason);
-                      setStopPickerOpen(false);
-                    }}
-                  >
-                    <Text style={styles.dropdownOptionText}>{reason}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            {stopReason && (
-              <Text style={styles.controlSubtitle}>Motif sélectionné : {stopReason}</Text>
-            )}
+            <TouchableOpacity
+              style={styles.controlIconBtn}
+              onPress={pauseActive ? handleResume : handlePausePress}
+              accessibilityLabel={pauseActive ? "Reprendre la course" : "Mettre la course en pause"}
+            >
+              <IconSymbol name={pauseActive ? "play.fill" : "pause.fill"} size={22} color={Colors.accent} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.controlIconBtn}
+              onPress={() => setStopPickerOpen((prev) => !prev)}
+              accessibilityLabel="Déclarer un stop exceptionnel"
+            >
+              <IconSymbol name="stop.fill" size={22} color={Colors.accent} />
+            </TouchableOpacity>
           </View>
+          <Text style={styles.controlCaption}>
+            Pause éco · {pauseActive ? formatPauseTimer() : "15 min maximum"}
+          </Text>
+          <Text style={styles.controlCaption}>
+            Stop exceptionnel · {stopReason ?? "Aucun motif"}
+          </Text>
+          {stopPickerOpen && (
+            <View style={[styles.dropdownList, { marginTop: 8 }]}>
+              {STOP_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setStopReason(reason);
+                    setStopPickerOpen(false);
+                  }}
+                >
+                  <Text style={styles.dropdownOptionText}>{reason}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           {autoAssignLoading && (
             <Text style={styles.controlSubtitle}>Recherche d'un colis proche…</Text>
           )}
-          {autoAssignError && (
-            <Text style={styles.errorTextSmall}>{autoAssignError}</Text>
-          )}
           {autoAssignedParcel && (
-            <View style={styles.controlCard}>
-              <Text style={styles.controlTitle}>Colis assigné automatiquement</Text>
+            <View style={styles.autoAssignRow}>
+              <IconSymbol name="cube.box.fill" size={18} color={Colors.accent} />
               <Text style={styles.controlSubtitle}>{autoAssignedParcel.label}</Text>
             </View>
           )}
         </View>
       </View>
 
-      <View style={styles.footer}>
-        {error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : (
-          <>
-            <Text style={styles.footerLabel}>Destination</Text>
-            <Text style={styles.footerValue}>{destAddress}</Text>
-          </>
-        )}
-        <TouchableOpacity style={styles.secondaryBtn} onPress={goBackToDest}>
-          <Text style={styles.secondaryBtnText}>Changer d’itinéraire</Text>
-        </TouchableOpacity>
+      <View style={styles.liveFooter}>
+        <Text style={styles.footerLabel}>Prochaine destination</Text>
+        <Text style={styles.footerValue}>{destAddress ?? "—"}</Text>
       </View>
     </SafeAreaView>
   );
+};
 
   const renderScanModal = () => (
     <Modal visible={scanVisible} animationType="slide" presentationStyle="fullScreen">
@@ -979,6 +931,58 @@ useEffect(() => {
             </View>
           </>
         )}
+      </View>
+    </Modal>
+  );
+
+  const renderStartConfirmModal = () => (
+    <Modal
+      visible={startConfirmVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleRejectStart}
+    >
+      <View style={styles.confirmOverlay}>
+        <View style={styles.confirmCard}>
+          <Text style={styles.confirmTitle}>Attention</Text>
+          <Text style={styles.confirmMessage}>
+            Une fois la course acceptée, la seule façon de l'arrêter est de livrer l'objet ou déclarer un
+            problème. Après trois incidents majeurs consécutifs, une période d'approbation de 3 à 4 mois sera
+            nécessaire avant de reprendre les livraisons. Merci de votre compréhension.
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity style={[styles.confirmBtn, styles.confirmBtnSecondary]} onPress={handleRejectStart}>
+              <Text style={styles.confirmBtnText}>⏹️ Refuser</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.confirmBtn, styles.confirmBtnPrimary]} onPress={handleConfirmStart}>
+              <Text style={styles.confirmBtnText}>▶️ Accepter</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderAutoAssignErrorModal = () => (
+    <Modal
+      visible={!!autoAssignError}
+      transparent
+      animationType="fade"
+      onRequestClose={handleAutoAssignDismiss}
+    >
+      <View style={styles.confirmOverlay}>
+        <View style={styles.confirmCard}>
+          <Text style={styles.confirmTitle}>Aucun colis compatible</Text>
+          <Text style={styles.confirmMessage}>
+            {autoAssignError ?? "Ce trajet ne dispose d'aucune cargaison compatible."}
+          </Text>
+          <TouchableOpacity
+            style={[styles.confirmBtn, styles.confirmBtnPrimary]}
+            onPress={handleAutoAssignDismiss}
+          >
+            <Text style={styles.confirmBtnText}>Retour course</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
@@ -1079,32 +1083,10 @@ useEffect(() => {
       {renderStage()}
       {renderLoopModal()}
       {renderScanModal()}
+      {renderStartConfirmModal()}
+      {renderAutoAssignErrorModal()}
     </>
   );
-}
-
-async function geocodeAddress(label: string): Promise<Coords | null> {
-  const trimmed = label?.trim();
-  if (!trimmed || !MAPBOX_TOKEN) return null;
-
-  const cacheKey = trimmed.toLowerCase();
-  if (geocodeCache.has(cacheKey)) {
-    return geocodeCache.get(cacheKey)!;
-  }
-
-  try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(trimmed)}.json?limit=1&language=fr&access_token=${MAPBOX_TOKEN}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    const feat = json?.features?.[0];
-    if (!feat || !feat.center) return null;
-
-    const coords = { lng: feat.center[0], lat: feat.center[1] };
-    geocodeCache.set(cacheKey, coords);
-    return coords;
-  } catch {
-    return null;
-  }
 }
 
 function distanceBetween(a: Coords, b: Coords): number {
@@ -1171,21 +1153,8 @@ const styles = StyleSheet.create({
   },
   destinationLabel: { color: Colors.text, fontSize: 17, fontWeight: "700" },
   destinationMeta: { color: Colors.textSecondary },
-  searchLabel: { color: Colors.textSecondary, fontWeight: "600", marginBottom: 8, marginTop: 12 },
-  searchRow: { flexDirection: "row", alignItems: "center" },
-  searchInput: {
-    flex: 1,
-    backgroundColor: Colors.input,
-    borderColor: Colors.border,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: Colors.text,
-  },
-  suggestBox: { backgroundColor: Colors.card, borderRadius: 12, marginTop: 8, overflow: "hidden" },
-  suggestItem: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
-  suggestText: { color: Colors.text },
+  searchLabel: { color: Colors.textSecondary, fontWeight: "600", marginBottom: 4, marginTop: 12 },
+  searchDisabled: { color: Colors.textSecondary, fontStyle: "italic" },
   loopSummary: { color: Colors.textSecondary, marginTop: 8, fontStyle: "italic" },
   ctaBar: { padding: 20 },
   primaryBtn: {
@@ -1220,16 +1189,20 @@ const styles = StyleSheet.create({
   offerMetaRow: { flexDirection: "row", justifyContent: "space-between" },
   offerMeta: { color: Colors.textSecondary },
   offerBonus: { color: Colors.text, fontWeight: "600", marginTop: 4 },
-  liveHeader: {
+  liveInfoBar: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: "#040a13",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  liveTitleWrap: { paddingHorizontal: 20, paddingBottom: 8 },
-  liveTitle: { color: Colors.text, fontSize: 20, fontWeight: "700" },
-  liveSubtitle: { color: Colors.textSecondary, fontSize: 14 },
+  liveInfoDestination: { color: Colors.text, fontSize: 20, fontWeight: "700" },
+  liveInfoStatus: { color: Colors.textSecondary, fontSize: 14, marginTop: 2 },
+  liveInfoStats: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 16 },
+  liveInfoStat: { flexBasis: "45%" },
+  liveInfoLabel: { color: Colors.textSecondary, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  liveInfoValue: { color: Colors.text, fontSize: 16, fontWeight: "600", marginTop: 2 },
   mapContainer: { flex: 1, borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#0f172a" },
   mapFallback: {
     flex: 1,
@@ -1238,56 +1211,35 @@ const styles = StyleSheet.create({
     backgroundColor: "#050b19",
   },
   mapFallbackText: { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: 20 },
-  liveOverlay: {
+  liveControlsOverlay: {
     position: "absolute",
     right: 16,
-    top: 16,
+    bottom: 16,
     backgroundColor: "rgba(3,7,18,0.85)",
     borderRadius: 16,
     padding: 16,
     width: 220,
     gap: 6,
   },
-  controlCard: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "rgba(10,15,25,0.92)",
-    gap: 8,
-  },
-  controlRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  controlTitle: { color: Colors.text, fontWeight: "700" },
   controlSubtitle: { color: Colors.textSecondary, fontSize: 12 },
-  pauseBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-  },
-  pauseBtnText: { color: Colors.background, fontWeight: "700" },
-  resumeBtn: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  resumeBtnText: { color: Colors.accent, fontWeight: "700" },
-  scanButton: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    padding: 12,
+  controlActionRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
+    marginTop: 10,
   },
-  scanButtonIcon: { fontSize: 20 },
-  scanButtonTitle: { color: Colors.text, fontWeight: "700" },
-  scanButtonSubtitle: { color: Colors.textSecondary, fontSize: 12 },
+  controlIconBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(68,222,172,0.08)",
+  },
+  controlCaption: { color: Colors.textSecondary, fontSize: 12 },
   dropdownControl: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1311,12 +1263,24 @@ const styles = StyleSheet.create({
   },
   dropdownOption: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
   dropdownOptionText: { color: Colors.text },
-  overlayTitle: { color: Colors.accent, fontWeight: "700", marginBottom: 4 },
-  overlayRow: { flexDirection: "row", justifyContent: "space-between" },
-  overlayLabel: { color: Colors.textSecondary, fontSize: 12 },
-  overlayValue: { color: Colors.text, fontWeight: "600" },
-  overlayHint: { color: Colors.textSecondary, marginTop: 6, fontSize: 12 },
-  footer: { padding: 20, gap: 8, backgroundColor: "#030712" },
+  autoAssignRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(10,15,25,0.92)",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  overlayHint: { color: Colors.textSecondary, marginBottom: 6, fontSize: 12 },
+  liveFooter: {
+    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: "#040a13",
+    gap: 4,
+  },
   footerLabel: { color: Colors.textSecondary, fontSize: 12 },
   footerValue: { color: Colors.text, fontSize: 16, fontWeight: "600" },
   errorText: { color: "#ff6b6b" },
@@ -1361,6 +1325,34 @@ const styles = StyleSheet.create({
   },
   scanHintText: { color: Colors.text, fontWeight: "600" },
   scanFooter: { paddingVertical: 16, alignItems: "center", gap: 8 },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 12,
+  },
+  confirmTitle: { color: Colors.text, fontSize: 20, fontWeight: "700" },
+  confirmMessage: { color: Colors.textSecondary, lineHeight: 20 },
+  confirmActions: { flexDirection: "row", gap: 12, marginTop: 8 },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  confirmBtnSecondary: { borderColor: Colors.border, backgroundColor: Colors.input },
+  confirmBtnPrimary: { borderColor: Colors.accent, backgroundColor: Colors.accent },
+  confirmBtnText: { color: Colors.text, fontWeight: "700", fontSize: 16 },
   loopModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

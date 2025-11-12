@@ -1,5 +1,5 @@
 import { useFonts } from 'expo-font';
-import { Link, Stack, usePathname, useSegments, useRouter, type Href } from 'expo-router';
+import { Stack, usePathname, useSegments, useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import 'react-native-reanimated';
@@ -28,21 +28,14 @@ function AppShell() {
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
-  const isNavigationScreen = segments?.includes("(courier)") && segments?.includes("navigate");
-  const hideTopBar =
-    pathname?.startsWith("/home/onboarding") ||
-    pathname?.startsWith("/(courier)/navigate") ||
-    isNavigationScreen;
+  const hideTopBar = pathname?.startsWith("/home/onboarding");
   const isProfile = pathname?.startsWith("/profile");
-
-  const switchLabel = isCourier ? 'Receveur' : 'Livreur';
-  const targetHref = isCourier ? '/(receiver)/home' : '/(courier)/navigate';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {!hideTopBar && (
         <View style={styles.topBar}>
-          {/* ✅ Navigation déclarative via Link pour garantir le switch */}
+          {/* ✅ Switch global pour changer de rôle immédiatement */}
           {isProfile ? (
             <TouchableOpacity
               style={styles.backButton}
@@ -58,23 +51,27 @@ function AppShell() {
                   <IconSymbol name="truck.fill" color={Colors.accent} size={20} />
                 </View>
               ) : (
-                <Link href="/(courier)/navigate" asChild>
-                  <TouchableOpacity style={styles.modeIcon} accessibilityLabel="Basculer en mode livreur">
-                    <IconSymbol name="truck.fill" color={Colors.accent} size={20} />
-                  </TouchableOpacity>
-                </Link>
+                <TouchableOpacity
+                  style={styles.modeIcon}
+                  onPress={() => router.replace("/(courier)/navigate" as Href)}
+                  accessibilityLabel="Basculer en mode livreur"
+                >
+                  <IconSymbol name="truck.fill" color={Colors.accent} size={20} />
+                </TouchableOpacity>
               )}
 
-              {isCourier ? (
-                <Link href="/(receiver)/home" asChild>
-                  <TouchableOpacity style={styles.modeIcon} accessibilityLabel="Basculer en mode receveur">
-                    <IconSymbol name="cube.box.fill" color={Colors.accent} size={20} />
-                  </TouchableOpacity>
-                </Link>
-              ) : (
+              {!isCourier ? (
                 <View style={[styles.modeIcon, styles.modeIconActive]}>
                   <IconSymbol name="cube.box.fill" color={Colors.accent} size={20} />
                 </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.modeIcon}
+                  onPress={() => router.replace("/(receiver)/home" as Href)}
+                  accessibilityLabel="Basculer en mode receveur"
+                >
+                  <IconSymbol name="cube.box.fill" color={Colors.accent} size={20} />
+                </TouchableOpacity>
               )}
             </View>
           )}
@@ -91,7 +88,6 @@ function AppShell() {
           headerBackVisible: false,  // et donc aucun bouton “back”
         }}
       >
-        <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
@@ -100,11 +96,17 @@ function AppShell() {
 
       {menuOpen && (
         <View style={styles.menuOverlay}>
-          <TouchableOpacity style={styles.menuClose} onPress={() => setMenuOpen(false)} accessibilityLabel="Fermer le menu utilisateur">
-            <IconSymbol name="xmark.circle.fill" color={Colors.accent} size={22} />
-          </TouchableOpacity>
           <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Mon compte</Text>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Mon compte</Text>
+              <TouchableOpacity
+                style={styles.menuClose}
+                onPress={() => setMenuOpen(false)}
+                accessibilityLabel="Fermer le menu utilisateur"
+              >
+                <IconSymbol name="xmark.circle.fill" color={Colors.white} size={22} />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -222,9 +224,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
     backgroundColor: Colors.card,
   },
-  modeIconText: {
-    fontSize: 20,
-  },
   avatarButton: {
     borderColor: Colors.border,
     borderWidth: 1,
@@ -239,17 +238,17 @@ const styles = StyleSheet.create({
   },
   menuOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(22, 29, 37, 0.98)",
+    backgroundColor: Colors.background,
     padding: 24,
     justifyContent: "flex-start",
   },
-  menuClose: {
-    alignSelf: "flex-end",
-    padding: 8,
+  menuHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  menuCloseText: {
-    color: Colors.white,
-    fontSize: 22,
+  menuClose: {
+    padding: 8,
   },
   menuContent: {
     marginTop: 20,

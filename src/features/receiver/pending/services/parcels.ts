@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import { ParcelWithAssign } from "../types";
 
 // Redirige vers /home avec pré-remplissage
@@ -13,7 +13,7 @@ export function handleEditParcel(p: ParcelWithAssign) {
     status: p.status ?? "",
   };
   router.push({
-    pathname: "/home",
+    pathname: "/(receiver)/home",
     params: { prefill: JSON.stringify(prefill) },
   });
 }

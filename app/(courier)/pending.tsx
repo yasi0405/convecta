@@ -1,5 +1,6 @@
 import { Parcel as ParcelCtx, useParcelContext } from "@/context/ParcelContext";
 import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -265,9 +266,16 @@ export default function CourierPendingList() {
     return (
       <View style={[styles.card, isCurrent && styles.currentCard]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.cardText, styles.cardTitle]}>
-            {isCurrent ? "🚀 Mission en cours" : "📦 Mission"}
-          </Text>
+          <View style={styles.titleIconRow}>
+            <IconSymbol
+              name={isCurrent ? "paperplane.fill" : "cube.box.fill"}
+              size={18}
+              color={Colors.accent}
+            />
+            <Text style={[styles.cardText, styles.cardTitle]}>
+              {isCurrent ? "Mission en cours" : "Mission"}
+            </Text>
+          </View>
           <Text style={[styles.badge, isCurrent && styles.badgePrimary]}>
             {readableStatus(item.status)}
           </Text>
@@ -448,6 +456,7 @@ const styles = StyleSheet.create({
   },
   currentCard: { borderColor: Colors.button, borderWidth: 2 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  titleIconRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   cardTitle: { fontWeight: "600" },
   cardText: { color: Colors.textOnCard, marginBottom: 4 },
 

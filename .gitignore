@@ -37,6 +37,7 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+convecta-dev-cafd8809e6a4.json
 
 app-example
 

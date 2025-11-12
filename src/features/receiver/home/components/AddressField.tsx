@@ -1,4 +1,5 @@
 import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import React from "react";
 import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import type { Suggestion } from "../types";
@@ -35,7 +36,7 @@ export function AddressField({
         />
         {showGPS && (
           <TouchableOpacity onPress={onPressGPS} style={styles.gpsButton} accessibilityRole="button">
-            <Text style={{ fontSize: 18 }}>📍</Text>
+            <IconSymbol name="location.fill" size={18} color={Colors.accent} />
           </TouchableOpacity>
         )}
       </View>

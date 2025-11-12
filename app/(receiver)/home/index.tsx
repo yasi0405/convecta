@@ -1,6 +1,7 @@
 import Colors from "@/theme/Colors";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -24,6 +25,15 @@ const notify = (title: string, msg: string) =>
 
 export default function HomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const prefill = useMemo(() => {
+    if (!params?.prefill || typeof params.prefill !== "string") return null;
+    try {
+      return JSON.parse(params.prefill);
+    } catch {
+      return null;
+    }
+  }, [params.prefill]);
 
   // Form
   const [isEdit, setIsEdit] = useState(false);
@@ -49,6 +59,19 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const { loading, err, durationSec, distanceM, commissionEUR } = useEstimate(adresseDepart, adresseArrivee);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setIsEdit(true);
+    setEditId(prefill.id ?? null);
+    if (prefill.type && (TYPE_OPTIONS as any).some((opt: any) => opt.value === prefill.type)) {
+      setType(prefill.type as any);
+    }
+    if (prefill.poids != null) setPoids(String(prefill.poids));
+    if (prefill.dimensions != null) setDimensions(String(prefill.dimensions));
+    if (prefill.adresseDepart != null) setAdresseDepart(String(prefill.adresseDepart));
+    if (prefill.adresseArrivee != null) setAdresseArrivee(String(prefill.adresseArrivee));
+  }, [prefill]);
 
   const handleSubmit = async () => {
     if (!type) return setError("Choisis un type d'envoi.");
@@ -133,7 +156,7 @@ export default function HomeScreen() {
           }}
           accessibilityLabel="Réinitialiser le formulaire"
         >
-          <Text style={styles.refreshIcon}>🔄</Text>
+          <IconSymbol name="arrow.clockwise" size={18} color={Colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -275,7 +298,6 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 },
   title: { fontSize: 22, textAlign: "left", color: Colors.text, flex: 1 },
   refreshButton: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, alignItems: "center", justifyContent: "center", width: 44, height: 44 },
-  refreshIcon: { fontSize: 20 },
   label: { color: Colors.text, marginBottom: 6, marginTop: 10, fontWeight: "600" },
   error: { color: "#b00020", marginBottom: 8, fontWeight: "700" },
   input: { backgroundColor: Colors.input, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 8, color: Colors.text },

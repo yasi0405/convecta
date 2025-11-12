@@ -1,4 +1,5 @@
 import Colors from "@/theme/Colors";
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import React, { useEffect, useState } from "react";
@@ -82,7 +83,10 @@ export default function CourierSummary() {
 
   const renderItem = ({ item }: { item: Parcel }) => (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>📦 {fmt(item.type)}</Text>
+      <View style={styles.cardTitleRow}>
+        <IconSymbol name="cube.box.fill" size={18} color={Colors.accent} />
+        <Text style={styles.cardTitle}>{fmt(item.type)}</Text>
+      </View>
       <Text style={styles.cardText}>Poids : {fmtKg(item.poids)}</Text>
       <Text style={styles.cardText}>
         Dimensions : {fmt(item.dimensions)}
@@ -140,7 +144,8 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
-  cardTitle: { fontWeight: "600", fontSize: 16, marginBottom: 6 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  cardTitle: { fontWeight: "600", fontSize: 16, color: Colors.text },
   cardText: { color: Colors.textOnCard, marginBottom: 3 },
   dateText: {
     color: Colors.textSecondary,

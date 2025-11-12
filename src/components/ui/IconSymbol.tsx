@@ -29,6 +29,7 @@ const MAPPING = {
   'plus.circle.fill': 'add-circle',
   'trash.fill': 'delete',
   'arrow.clockwise.circle.fill': 'refresh',
+  'arrow.clockwise': 'refresh',
   'checkmark.circle.fill': 'check-circle',
   'xmark': 'close',
   'xmark.circle.fill': 'close',
@@ -37,6 +38,13 @@ const MAPPING = {
   'camera.viewfinder': 'camera',
   'package.fill': 'inventory-2',
   'person.and.arrow.left.and.arrow.right': 'people',
+  'location.fill': 'location-on',
+  'qrcode.viewfinder': 'qr-code-scanner',
+  'play.fill': 'play-arrow',
+  'pause.fill': 'pause',
+  'stop.fill': 'stop',
+  timer: 'timer',
+  calendar: 'calendar-today',
 } as IconMapping;
 
 /**

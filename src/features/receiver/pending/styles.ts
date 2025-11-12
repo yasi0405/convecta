@@ -18,7 +18,8 @@ export const styles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  cardTitle: { color: Colors.textOnCard, fontWeight: "600" },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardTitleText: { color: Colors.textOnCard, fontWeight: "600" },
   cardList: { gap: 12 },
   cardText: { color: Colors.textSecondary, marginBottom: 4 },
 
