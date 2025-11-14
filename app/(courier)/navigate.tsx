@@ -26,7 +26,7 @@ import {
 } from "react-native";
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
-const HAS_MAPBOX = Platform.OS === "ios" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
+const HAS_MAPBOX = Platform.OS !== "web" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
 if (HAS_MAPBOX && MAPBOX_TOKEN) {
   MapboxGL.setAccessToken(MAPBOX_TOKEN);
 }

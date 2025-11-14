@@ -4,8 +4,20 @@ import TabBarBackground from "@/components/ui/TabBarBackground";
 import Colors from "@/theme/Colors";
 import { Tabs } from "expo-router";
 import React from "react";
+import { useMemo } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ReceiverLayout() {
+  const { bottom } = useSafeAreaInsets();
+  const tabBarMetrics = useMemo(() => {
+    const safeBottom = Math.max(bottom, 10);
+    const baseHeight = 62;
+    return {
+      paddingBottom: safeBottom,
+      height: baseHeight + safeBottom,
+    };
+  }, [bottom]);
+
   return (
     <Tabs
       screenOptions={{
@@ -19,6 +31,8 @@ export default function ReceiverLayout() {
           borderTopWidth: 0,
           elevation: 0,
           position: "absolute",
+          paddingBottom: tabBarMetrics.paddingBottom,
+          height: tabBarMetrics.height,
         },
         tabBarLabelStyle: {
           fontSize: 12,
