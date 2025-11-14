@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Colors from "@/theme/Colors";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { confirmReceptionWindow } from '../services/parcels';
 
 export default function ConfirmWindowModal({
@@ -22,6 +23,8 @@ export default function ConfirmWindowModal({
   const [endISO, setEndISO] = useState<string>(
     defaultEndISO ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
   );
+  const [selectedPresetIdx, setSelectedPresetIdx] = useState<number>(-1);
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
 
   const presets = useMemo(() => {
     const now = new Date();
@@ -34,6 +37,31 @@ export default function ConfirmWindowModal({
       { label: 'Demain 18–20h', s: tmr18.toISOString(), e: tmr20.toISOString() },
     ];
   }, []);
+
+  useEffect(() => {
+    if (!presets.length) return;
+    const matching = presets.findIndex((p) => p.s === defaultStartISO && p.e === defaultEndISO);
+    const fallbackIndex = matching >= 0 ? matching : 0;
+    setSelectedPresetIdx(fallbackIndex);
+    setStartISO(presets[fallbackIndex].s);
+    setEndISO(presets[fallbackIndex].e);
+  }, [presets, defaultStartISO, defaultEndISO]);
+
+  useEffect(() => {
+    if (!open) setSlotPickerOpen(false);
+  }, [open]);
+
+  const handlePresetSelect = useCallback(
+    (index: number) => {
+      const preset = presets[index];
+      if (!preset) return;
+      setSelectedPresetIdx(index);
+      setStartISO(preset.s);
+      setEndISO(preset.e);
+      setSlotPickerOpen(false);
+    },
+    [presets]
+  );
 
   const submit = useCallback(async () => {
     try {
@@ -54,25 +82,59 @@ export default function ConfirmWindowModal({
           <Text style={styles.modalSubtitle}>Choisissez un créneau de présence</Text>
 
           <View style={{ gap: 8, marginTop: 12 }}>
-            {presets.map((p) => (
+            {presets.map((p, idx) => (
               <TouchableOpacity
                 key={p.label}
-                onPress={() => {
-                  setStartISO(p.s);
-                  setEndISO(p.e);
-                }}
-                style={styles.presetBtn}
+                onPress={() => handlePresetSelect(idx)}
+                style={[
+                  styles.presetBtn,
+                  selectedPresetIdx === idx ? styles.presetBtnActive : styles.presetBtnInactive,
+                ]}
               >
-                <Text style={styles.presetBtnLabel}>{p.label}</Text>
+                <Text
+                  style={[
+                    styles.presetBtnLabel,
+                    selectedPresetIdx === idx ? styles.presetBtnLabelActive : styles.presetBtnLabelInactive,
+                  ]}
+                >
+                  {p.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <View style={{ height: 12 }} />
-          <Text style={styles.inputLabel}>Début (ISO 8601)</Text>
-          <TextInput value={startISO} onChangeText={setStartISO} style={styles.input} autoCapitalize="none" />
-          <Text style={styles.inputLabel}>Fin (ISO 8601)</Text>
-          <TextInput value={endISO} onChangeText={setEndISO} style={styles.input} autoCapitalize="none" />
+          <View style={styles.dropdownBlock}>
+            <Text style={styles.dropdownLabel}>Sélection de créneau</Text>
+            <TouchableOpacity style={styles.dropdownTrigger} onPress={() => setSlotPickerOpen((prev) => !prev)}>
+              <Text style={styles.dropdownValue}>
+                {selectedPresetIdx >= 0 ? presets[selectedPresetIdx]?.label : 'Choisir un créneau'}
+              </Text>
+              <Text style={styles.dropdownChevron}>{slotPickerOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {slotPickerOpen && (
+              <View style={styles.dropdownList}>
+                {presets.map((p, idx) => (
+                  <TouchableOpacity
+                    key={`${p.label}-dropdown`}
+                    onPress={() => handlePresetSelect(idx)}
+                    style={[
+                      styles.dropdownOption,
+                      selectedPresetIdx === idx && styles.dropdownOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownOptionLabel,
+                        selectedPresetIdx === idx && styles.dropdownOptionLabelActive,
+                      ]}
+                    >
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
 
           <View style={styles.modalActions}>
             <TouchableOpacity onPress={onClose} style={[styles.btn, styles.btnGhost]} disabled={submitting}>
@@ -93,10 +155,42 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 },
   modalTitle: { fontSize: 18, fontWeight: '700' },
   modalSubtitle: { marginTop: 4, opacity: 0.8 },
-  presetBtn: { paddingVertical: 10, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, marginVertical: 5, paddingHorizontal: 12 },
-  presetBtnLabel: { fontWeight: '600' },
-  inputLabel: { marginTop: 10, fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 10 },
+  presetBtn: { paddingVertical: 12, borderRadius: 12, paddingHorizontal: 14 },
+  presetBtnActive: { backgroundColor: Colors.button, borderWidth: 1, borderColor: Colors.button },
+  presetBtnInactive: {
+    backgroundColor: 'rgba(68, 222, 172, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(68, 222, 172, 0.4)',
+  },
+  presetBtnLabel: { fontWeight: '700', textAlign: 'center' },
+  presetBtnLabelActive: { color: Colors.buttonText },
+  presetBtnLabelInactive: { color: Colors.buttonText },
+  dropdownBlock: { marginTop: 18 },
+  dropdownLabel: { fontWeight: '600', marginBottom: 8 },
+  dropdownTrigger: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownValue: { fontWeight: '600', color: '#111' },
+  dropdownChevron: { color: '#111', fontSize: 12 },
+  dropdownList: {
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  dropdownOption: { paddingHorizontal: 14, paddingVertical: 12 },
+  dropdownOptionActive: { backgroundColor: 'rgba(68, 222, 172, 0.15)' },
+  dropdownOptionLabel: { color: '#111', fontWeight: '600' },
+  dropdownOptionLabelActive: { color: Colors.buttonText },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 10 },
   btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
   btnPrimary: { backgroundColor: '#0a84ff' },

@@ -6,6 +6,7 @@ import {
   usePendingParcels,
 } from "@features/receiver/pending/hooks/usePendingParcels";
 import Colors from "@/theme/Colors";
+import { RECEIVER_CONTENT_TOP_SPACING } from "@constants/index";
 import React, { useMemo, useState } from "react";
 import {
   FlatList,
@@ -106,7 +107,11 @@ export default function PendingScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: RECEIVER_CONTENT_TOP_SPACING,
+    paddingBottom: 40,
+  },
   filterBar: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
   chipBadgeActive: { backgroundColor: Colors.white },
   chipBadgeText: { color: Colors.textSecondary, fontWeight: "700", textAlign: "center" },
   chipBadgeTextActive: { color: Colors.buttonText },
-  emptyState: { paddingTop: 64, alignItems: "center", gap: 8 },
+  emptyState: { paddingTop: RECEIVER_CONTENT_TOP_SPACING, alignItems: "center", gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "600", color: Colors.text },
   emptyText: { textAlign: "center", color: Colors.textSecondary, maxWidth: 260 },
 });

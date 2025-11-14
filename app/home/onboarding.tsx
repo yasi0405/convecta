@@ -85,7 +85,7 @@ function PrimaryButton({ title, onPress, disabled, full = false }:
       disabled={disabled}
       accessibilityRole="button"
       style={{
-        backgroundColor: disabled ? "#2a5448" : Colors.button,
+        backgroundColor: disabled ? "rgba(68, 222, 172, 0.35)" : Colors.button,
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderRadius: 12,

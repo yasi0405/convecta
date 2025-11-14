@@ -3,7 +3,9 @@ import type { Schema } from "@amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { RECEIVER_CONTENT_TOP_SPACING } from "@constants/index";
 
 // —— Services (isolés) ——
 function getClient() {
@@ -131,45 +133,47 @@ export default function ParcelSummary() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Résumé du colis</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Résumé du colis</Text>
 
-      {loadingById ? (
-        <View style={styles.centerRow}>
-          <ActivityIndicator />
-          <Text style={styles.muted}> Chargement…</Text>
-        </View>
-      ) : null}
+        {loadingById ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator />
+            <Text style={styles.muted}> Chargement…</Text>
+          </View>
+        ) : null}
 
-      <Row label="Type" value={fmt(data.type)} />
-      <Row label="Poids" value={fmtKg(data.poids)} />
-      <Row label="Dimensions" value={fmt(data.dimensions)} />
-      {/* ✅ 2 lignes adresses */}
-      <Row label="Adresse de départ" value={fmt(data.adresseDepart)} />
-      <Row label="Adresse d’arrivée" value={fmt(data.adresseArrivee)} />
+        <Row label="Type" value={fmt(data.type)} />
+        <Row label="Poids" value={fmtKg(data.poids)} />
+        <Row label="Dimensions" value={fmt(data.dimensions)} />
+        {/* ✅ 2 lignes adresses */}
+        <Row label="Adresse de départ" value={fmt(data.adresseDepart)} />
+        <Row label="Adresse d’arrivée" value={fmt(data.adresseArrivee)} />
 
-      <TouchableOpacity
-        style={[styles.button, (submitting || !!fromDb?.id) && { opacity: 0.7 }]}
-        onPress={handleConfirm}
-        disabled={submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.buttonText}>
-            {fromDb?.id ? "Déjà en base" : "Confirmer et enregistrer"}
-          </Text>
+        <TouchableOpacity
+          style={[styles.button, (submitting || !!fromDb?.id) && { opacity: 0.7 }]}
+          onPress={handleConfirm}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator />
+          ) : (
+            <Text style={styles.buttonText}>
+              {fromDb?.id ? "Déjà en base" : "Confirmer et enregistrer"}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Bloc debug (désactive en prod) */}
+        {__DEV__ && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={[styles.label, { marginBottom: 4 }]}>[DEV] Params reçus :</Text>
+            <Text style={[styles.value, { fontSize: 12 }]}>{JSON.stringify(params)}</Text>
+          </View>
         )}
-      </TouchableOpacity>
-
-      {/* Bloc debug (désactive en prod) */}
-      {__DEV__ && (
-        <View style={{ marginTop: 16 }}>
-          <Text style={[styles.label, { marginBottom: 4 }]}>[DEV] Params reçus :</Text>
-          <Text style={[styles.value, { fontSize: 12 }]}>{JSON.stringify(params)}</Text>
-        </View>
-      )}
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -183,7 +187,15 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 10, backgroundColor: Colors.background },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: RECEIVER_CONTENT_TOP_SPACING,
+    backgroundColor: Colors.background,
+    flexGrow: 1,
+    gap: 10,
+  },
   title: { fontSize: 22, marginBottom: 8, textAlign: "center", color: Colors.text },
   row: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
   label: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },

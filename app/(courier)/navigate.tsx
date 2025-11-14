@@ -20,6 +20,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -120,6 +121,13 @@ type Offer = typeof OFFER_PRESETS[number];
 type Coords = { lat: number; lng: number };
 
 type Step = { instruction: string; distance: number; duration: number };
+type LocationSuggestion = {
+  id: string;
+  title: string;
+  subtitle: string;
+  placeName: string;
+  coords: Coords;
+};
 
 const extractParcels = (payload: any): any[] => {
   if (!payload) return [];
@@ -175,6 +183,10 @@ export default function CourierNavigate() {
   const hourListRef = useRef<FlatList<number> | null>(null);
   const minuteListRef = useRef<FlatList<number> | null>(null);
   const loopIntentRef = useRef<"stay" | "toOffer" | "toLive">("stay");
+  const [customQuery, setCustomQuery] = useState("");
+  const [customResults, setCustomResults] = useState<LocationSuggestion[]>([]);
+  const [customSearchLoading, setCustomSearchLoading] = useState(false);
+  const [customSearchError, setCustomSearchError] = useState<string | null>(null);
 
 const scrollPickersTo = (value: number, animated = true) => {
   const hoursVal = Math.floor(value / 60);
@@ -259,6 +271,42 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     setStartConfirmVisible(false);
     startConfirmDurationRef.current = null;
   };
+
+  const openLoopModal = useCallback(
+    (intent: "stay" | "toOffer" | "toLive" = "stay", fallbackSelection?: number | null) => {
+      loopIntentRef.current = intent;
+      setLoopSelection((prev) => {
+        if (typeof fallbackSelection === "number") return fallbackSelection;
+        return loopDuration ?? prev;
+      });
+      setLoopModalVisible(true);
+    },
+    [loopDuration]
+  );
+
+  const closeLoopModal = useCallback(() => {
+    setLoopModalVisible(false);
+    loopIntentRef.current = "stay";
+  }, []);
+
+  const handleCustomDestinationSelect = useCallback(
+    (suggestion: LocationSuggestion) => {
+      const customDestination: Destination = {
+        id: `custom-${suggestion.id}`,
+        label: suggestion.title,
+        missions: suggestion.subtitle || "Adresse personnalisée",
+        query: suggestion.placeName,
+        coords: suggestion.coords,
+      };
+      setSelectedDestination(customDestination);
+      setCustomQuery(suggestion.placeName);
+      setCustomResults([]);
+      setCustomSearchError(null);
+      setLoopDuration(null);
+      closeLoopModal();
+    },
+    [closeLoopModal]
+  );
 
   const handleAutoAssignDismiss = () => {
     setAutoAssignError(null);
@@ -349,22 +397,46 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
         if (!current || cancelled) return;
 
         setOrigin(current);
-        setRouteCoords([
-          [current.lng, current.lat],
-          [target.lng, target.lat],
-        ]);
 
         const distKm = distanceBetween(current, target);
-        const meters = Math.max(0, Math.round(distKm * 1000));
-        const etaSeconds = Math.max(0, Math.round((distKm / AVERAGE_SPEED_KMH) * 3600));
+        const fallbackMeters = Math.max(0, Math.round(distKm * 1000));
+        const fallbackEtaSeconds = Math.max(0, Math.round((distKm / AVERAGE_SPEED_KMH) * 3600));
+        const fallbackStep: Step = {
+          instruction: fallbackMeters < 200 ? "Arrivée imminente" : "Continuer vers la destination",
+          distance: fallbackMeters,
+          duration: fallbackEtaSeconds,
+        };
 
+        let mapboxRoute: Awaited<ReturnType<typeof fetchMapboxDirections>> = null;
+        if (!cancelled) {
+          mapboxRoute = await fetchMapboxDirections(current, target);
+        }
+        if (cancelled) return;
+
+        const coords =
+          mapboxRoute?.coordinates?.length && mapboxRoute.coordinates.length > 1
+            ? mapboxRoute.coordinates
+            : [
+                [current.lng, current.lat],
+                [target.lng, target.lat],
+              ];
+
+        const meters =
+          mapboxRoute && Number.isFinite(mapboxRoute.distance)
+            ? Math.max(0, Math.round(mapboxRoute.distance))
+            : fallbackMeters;
+
+        const etaSeconds =
+          mapboxRoute && Number.isFinite(mapboxRoute.duration)
+            ? Math.max(0, Math.round(mapboxRoute.duration))
+            : fallbackEtaSeconds;
+
+        const nextStepData = mapboxRoute?.nextStep ?? fallbackStep;
+
+        setRouteCoords(coords);
         setRemainMeters(meters);
         setEtaSec(etaSeconds);
-        setNextStep({
-          instruction: meters < 200 ? "Arrivée imminente" : "Continuer vers la destination",
-          distance: meters,
-          duration: etaSeconds,
-        });
+        setNextStep(nextStepData);
         setLiveTicker(0);
       } catch (e) {
         console.log("updateRoute error:", e);
@@ -521,23 +593,6 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     return `${m} min`;
   };
 
-  const openLoopModal = useCallback(
-    (intent: "stay" | "toOffer" | "toLive" = "stay", fallbackSelection?: number | null) => {
-      loopIntentRef.current = intent;
-      setLoopSelection((prev) => {
-        if (typeof fallbackSelection === "number") return fallbackSelection;
-        return loopDuration ?? prev;
-      });
-      setLoopModalVisible(true);
-    },
-    [loopDuration]
-  );
-
-  const closeLoopModal = useCallback(() => {
-    setLoopModalVisible(false);
-    loopIntentRef.current = "stay";
-  }, []);
-
   const formatLoopAddressLabel = (mins?: number | null) =>
     mins ? `Boucle locale (${formatDurationLabel(mins)})` : "Boucle locale";
 
@@ -631,6 +686,51 @@ useEffect(() => {
   if (loopModalVisible) return;
   openLoopModal("stay");
 }, [stage, selectedDestination, loopDuration, loopModalVisible, openLoopModal]);
+
+  useEffect(() => {
+    if (stage !== "dest") return;
+    const trimmed = customQuery.trim();
+    if (!MAPBOX_TOKEN) {
+      setCustomSearchError("Recherche indisponible : configurez la clé Mapbox.");
+      setCustomResults([]);
+      setCustomSearchLoading(false);
+      return;
+    }
+    if (trimmed.length < 3) {
+      setCustomResults([]);
+      setCustomSearchLoading(false);
+      setCustomSearchError(trimmed.length === 0 ? null : "Tape au moins 3 caractères.");
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setCustomSearchLoading(true);
+    setCustomSearchError(null);
+
+    const timeout = setTimeout(async () => {
+      try {
+        const spots = await geocodePlaces(trimmed, controller.signal);
+        if (cancelled) return;
+        setCustomResults(spots);
+        if (!spots.length) {
+          setCustomSearchError("Aucun lieu trouvé. Essaie un autre terme.");
+        }
+      } catch (error) {
+        if (controller.signal.aborted || cancelled) return;
+        setCustomSearchError("Impossible de contacter le service de géolocalisation.");
+      } finally {
+        if (!controller.signal.aborted && !cancelled) {
+          setCustomSearchLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [customQuery, stage]);
   const renderDestStage = () => {
     const ctaDisabled =
       !selectedDestination || (selectedDestination.id === "loop" && !loopDuration);
@@ -669,15 +769,84 @@ useEffect(() => {
               );
             })}
           </View>
-          <View style={{ width: "100%", marginTop: 24 }}>
+          <View style={styles.customSearchBlock}>
             <Text style={styles.searchLabel}>Recherche personnalisée</Text>
-            <Text style={styles.searchDisabled}>
-              Indisponible : appels Mapbox réservés au SDK natif.
-            </Text>
+            {MAPBOX_TOKEN ? (
+              <>
+                <View style={styles.searchInputRow}>
+                  <IconSymbol name="magnifyingglass" size={18} color={Colors.textSecondary} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Adresse, ville ou lieu"
+                    placeholderTextColor="rgba(255,255,255,0.45)"
+                    value={customQuery}
+                    onChangeText={setCustomQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                  />
+                  {customSearchLoading && <ActivityIndicator color={Colors.accent} size="small" />}
+                </View>
+                {customSearchError ? (
+                  <Text style={styles.searchError}>{customSearchError}</Text>
+                ) : (
+                  <Text style={styles.searchHint}>
+                    {customQuery.trim().length < 3
+                      ? "Tape au moins 3 caractères"
+                      : customResults.length
+                        ? "Choisis un résultat ci-dessous"
+                        : "Recherche en cours…"}
+                  </Text>
+                )}
+                {customResults.length > 0 && (
+                  <View style={styles.searchResults}>
+                    {customResults.map((result, idx) => (
+                      <TouchableOpacity
+                        key={result.id}
+                        style={[
+                          styles.searchResultRow,
+                          idx === customResults.length - 1 && styles.searchResultRowLast,
+                        ]}
+                        onPress={() => handleCustomDestinationSelect(result)}
+                      >
+                        <IconSymbol name="mappin.and.ellipse" size={18} color={Colors.accent} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.searchResultTitle}>{result.title}</Text>
+                          <Text style={styles.searchResultSubtitle}>{result.subtitle}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={styles.searchDisabled}>
+                Indisponible : configurez les appels Mapbox pour activer la recherche.
+              </Text>
+            )}
             {selectedDestination?.id === "loop" && loopDuration && (
               <Text style={styles.loopSummary}>
                 Disponibilité définie : {formatDurationLabel(loopDuration)}
               </Text>
+            )}
+            {selectedDestination?.id?.startsWith("custom-") && (
+              <View style={styles.customSelection}>
+                <IconSymbol name="checkmark.seal.fill" size={18} color={Colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.customSelectionLabel}>Destination personnalisée</Text>
+                  <Text style={styles.customSelectionValue}>{selectedDestination.label}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedDestination(null);
+                    setCustomQuery("");
+                    setCustomResults([]);
+                    setCustomSearchError(null);
+                  }}
+                >
+                  <Text style={styles.customSelectionClear}>Réinitialiser</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -812,7 +981,7 @@ useEffect(() => {
                   id="route-line"
                   style={{
                     lineWidth: 6,
-                    lineColor: "#00ffc3",
+                    lineColor: Colors.button,
                     lineCap: "round",
                     lineJoin: "round",
                     lineBlur: 0.7,
@@ -952,10 +1121,16 @@ useEffect(() => {
           </Text>
           <View style={styles.confirmActions}>
             <TouchableOpacity style={[styles.confirmBtn, styles.confirmBtnSecondary]} onPress={handleRejectStart}>
-              <Text style={styles.confirmBtnText}>⏹️ Refuser</Text>
+              <View style={styles.confirmBtnContent}>
+                <IconSymbol name="stop.fill" size={16} color={Colors.accent} />
+                <Text style={styles.confirmBtnText}>Refuser</Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.confirmBtn, styles.confirmBtnPrimary]} onPress={handleConfirmStart}>
-              <Text style={styles.confirmBtnText}>▶️ Accepter</Text>
+              <View style={styles.confirmBtnContent}>
+                <IconSymbol name="play.fill" size={16} color={Colors.background} />
+                <Text style={[styles.confirmBtnText, styles.confirmBtnTextPrimary]}>Accepter</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -1089,6 +1264,123 @@ useEffect(() => {
   );
 }
 
+async function fetchMapboxDirections(
+  origin: Coords,
+  destination: Coords,
+): Promise<{ coordinates: [number, number][]; distance: number; duration: number; nextStep: Step } | null> {
+  if (!MAPBOX_TOKEN) return null;
+  try {
+    const coordinatesQuery = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesQuery}` +
+      `?alternatives=false&geometries=geojson&overview=full&steps=true&language=fr&access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn("Mapbox directions HTTP error:", response.status);
+      return null;
+    }
+    const payload = await response.json();
+    const route = payload?.routes?.[0];
+    if (!route) return null;
+
+    const coordinates = Array.isArray(route.geometry?.coordinates)
+      ? route.geometry.coordinates
+          .map((pair: any) => (Array.isArray(pair) && pair.length >= 2 ? [Number(pair[0]), Number(pair[1])] : null))
+          .filter(Boolean) as [number, number][]
+      : [];
+
+    const legs = Array.isArray(route.legs) ? route.legs : [];
+    const steps = legs.flatMap((leg: any) => (Array.isArray(leg?.steps) ? leg.steps : []));
+    const next = steps.find((step: any) => (step?.distance ?? 0) > 25) ?? steps[0];
+    const instructionCandidate =
+      typeof next?.maneuver?.instruction === "string" && next.maneuver.instruction.trim().length > 0
+        ? next.maneuver.instruction.trim()
+        : typeof next?.name === "string" && next.name.length > 0
+          ? next.name
+          : null;
+
+    const nextStep: Step = {
+      instruction: instructionCandidate ?? "Continuer vers la destination",
+      distance:
+        typeof next?.distance === "number"
+          ? next.distance
+          : typeof route.distance === "number"
+            ? route.distance
+            : 0,
+      duration:
+        typeof next?.duration === "number"
+          ? next.duration
+          : typeof route.duration === "number"
+            ? route.duration
+            : 0,
+    };
+
+    return {
+      coordinates,
+      distance: typeof route.distance === "number" ? route.distance : 0,
+      duration: typeof route.duration === "number" ? route.duration : 0,
+      nextStep,
+    };
+  } catch (error) {
+    console.warn("Mapbox directions fetch failed:", error);
+    return null;
+  }
+}
+
+async function geocodePlaces(query: string, signal?: AbortSignal): Promise<LocationSuggestion[]> {
+  if (!MAPBOX_TOKEN) return [];
+  try {
+    const encodedQuery = encodeURIComponent(query);
+    const url =
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json` +
+      `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}` +
+      `&autocomplete=true&language=fr&limit=5&types=place,locality,address,poi`;
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+      console.warn("Mapbox geocode HTTP error:", response.status);
+      return [];
+    }
+    const payload = await response.json();
+    const features: any[] = Array.isArray(payload?.features) ? payload.features : [];
+    return features
+      .map((feature) => {
+        const center = Array.isArray(feature?.center) ? feature.center : null;
+        if (!center || center.length < 2) return null;
+        const coords: Coords = { lng: Number(center[0]), lat: Number(center[1]) };
+        if (!Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return null;
+        const title: string =
+          feature?.text ??
+          feature?.place_name?.split(",")?.[0]?.trim() ??
+          feature?.place_name ??
+          query;
+
+        const contextTexts = Array.isArray(feature?.context)
+          ? feature.context
+              .map((ctx: any) => ctx?.text)
+              .filter(Boolean)
+          : [];
+        const subtitle =
+          feature?.place_name ??
+          contextTexts.join(" · ") ??
+          feature?.properties?.address ??
+          title;
+
+        return {
+          id: feature?.id ?? `${title}-${coords.lat}-${coords.lng}`,
+          title,
+          subtitle,
+          placeName: feature?.place_name ?? title,
+          coords,
+        } as LocationSuggestion;
+      })
+      .filter(Boolean) as LocationSuggestion[];
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      return [];
+    }
+    throw error;
+  }
+}
+
 function distanceBetween(a: Coords, b: Coords): number {
   const R = 6371;
   const lat1 = (a.lat * Math.PI) / 180;
@@ -1155,6 +1447,54 @@ const styles = StyleSheet.create({
   destinationMeta: { color: Colors.textSecondary },
   searchLabel: { color: Colors.textSecondary, fontWeight: "600", marginBottom: 4, marginTop: 12 },
   searchDisabled: { color: Colors.textSecondary, fontStyle: "italic" },
+  customSearchBlock: { width: "100%", marginTop: 24, gap: 8 },
+  searchInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.input,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: { flex: 1, color: Colors.text, fontSize: 16 },
+  searchHint: { color: Colors.textSecondary, fontSize: 12 },
+  searchError: { color: "#ff6b6b", fontSize: 12 },
+  searchResults: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+    overflow: "hidden",
+  },
+  searchResultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  searchResultRowLast: { borderBottomWidth: 0 },
+  searchResultTitle: { color: Colors.text, fontWeight: "600" },
+  searchResultSubtitle: { color: Colors.textSecondary, fontSize: 13 },
+  customSelection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(68, 222, 172, 0.12)",
+    padding: 12,
+    marginTop: 4,
+  },
+  customSelectionLabel: { color: Colors.textSecondary, fontSize: 12, textTransform: "uppercase" },
+  customSelectionValue: { color: Colors.text, fontWeight: "700" },
+  customSelectionClear: { color: Colors.accent, fontWeight: "600" },
   loopSummary: { color: Colors.textSecondary, marginTop: 8, fontStyle: "italic" },
   ctaBar: { padding: 20 },
   primaryBtn: {
@@ -1352,7 +1692,9 @@ const styles = StyleSheet.create({
   },
   confirmBtnSecondary: { borderColor: Colors.border, backgroundColor: Colors.input },
   confirmBtnPrimary: { borderColor: Colors.accent, backgroundColor: Colors.accent },
+  confirmBtnContent: { flexDirection: "row", alignItems: "center", gap: 8 },
   confirmBtnText: { color: Colors.text, fontWeight: "700", fontSize: 16 },
+  confirmBtnTextPrimary: { color: Colors.background },
   loopModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

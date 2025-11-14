@@ -339,7 +339,10 @@ export default function CourierPendingList() {
       <TouchableOpacity
         style={[
           styles.refreshButton,
-          { marginBottom: 10, backgroundColor: onlyInProgress ? "#4CAF50" : Colors.button },
+          {
+            marginBottom: 10,
+            backgroundColor: onlyInProgress ? Colors.button : "rgba(68, 222, 172, 0.25)",
+          },
         ]}
         onPress={() => setOnlyInProgress((v) => !v)}
       >
@@ -486,8 +489,8 @@ const styles = StyleSheet.create({
   buttonText: { color: Colors.buttonText, fontWeight: "600" },
 
   // 🟩 Bouton vert "Scanner réception"
-  validate: { backgroundColor: "#1DB954" },
-  validateText: { color: "#fff", fontWeight: "700" },
+  validate: { backgroundColor: Colors.button },
+  validateText: { color: Colors.buttonText, fontWeight: "700" },
 
   refreshButton: {
     backgroundColor: Colors.button,

@@ -1,5 +1,6 @@
 import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import { RECEIVER_CONTENT_TOP_SPACING } from "@constants/index";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
@@ -294,7 +295,13 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1, backgroundColor: Colors.background },
-  container: { padding: 20, backgroundColor: Colors.background, flexGrow: 1 },
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: RECEIVER_CONTENT_TOP_SPACING,
+    backgroundColor: Colors.background,
+    flexGrow: 1,
+  },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 },
   title: { fontSize: 22, textAlign: "left", color: Colors.text, flex: 1 },
   refreshButton: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, alignItems: "center", justifyContent: "center", width: 44, height: 44 },

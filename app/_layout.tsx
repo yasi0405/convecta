@@ -182,14 +182,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   switchButton: {
-    borderColor: "#00BFA5",
+    borderColor: Colors.accent,
     borderWidth: 2,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   switchButtonText: {
-    color: "#00BFA5",
+    color: Colors.accent,
     fontSize: 13,
     fontWeight: "bold",
   },

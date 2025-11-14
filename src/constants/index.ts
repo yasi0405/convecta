@@ -1,0 +1,1 @@
+export const RECEIVER_CONTENT_TOP_SPACING = 12;

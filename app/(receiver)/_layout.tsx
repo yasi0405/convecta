@@ -51,7 +51,7 @@ export default function ReceiverLayout() {
 
       {/* ⏳ Colis en attente d’envoi */}
       <Tabs.Screen
-        name="pending"
+        name="pending/index"
         options={{
           title: "Mes colis",
           tabBarIcon: ({ color }) => (

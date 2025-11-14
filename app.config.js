@@ -8,7 +8,7 @@ module.exports = ({ config }) => ({
   expo: {
     name: "convecta",
     slug: "convecta",
-    version: "1.0.23",
+    version: "1.0.24",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "convecta",
@@ -84,7 +84,7 @@ module.exports = ({ config }) => ({
       EXPO_PUBLIC_MAPBOX_TOKEN: process.env.EXPO_PUBLIC_MAPBOX_TOKEN || "",
     },
 
-    runtimeVersion: "1.0.23",
+    runtimeVersion: "1.0.24",
     updates: {
       url: "https://u.expo.dev/87d19859-6b3f-4665-99fc-e47ffcb8b914",
     },

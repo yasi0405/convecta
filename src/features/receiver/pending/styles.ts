@@ -34,14 +34,14 @@ export const styles = StyleSheet.create({
   },
 
   qrButton: {
-    backgroundColor: "#1DB954",
+    backgroundColor: Colors.button,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     minWidth: 120,
     alignItems: "center",
   },
-  qrButtonText: { color: "#fff", fontWeight: "700" },
+  qrButtonText: { color: Colors.buttonText, fontWeight: "700" },
 
   editButton: {
     backgroundColor: "transparent",
