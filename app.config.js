@@ -8,6 +8,7 @@ module.exports = ({ config }) => ({
   expo: {
     name: "convecta",
     slug: "convecta",
+    owner: "ready-to-dev",
     version: "1.0.24",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
