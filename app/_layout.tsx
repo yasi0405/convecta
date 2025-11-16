@@ -3,7 +3,7 @@ import { Stack, usePathname, useSegments, useRouter, type Href } from 'expo-rout
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ParcelProvider } from '@/context/ParcelContext';
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
@@ -25,16 +25,18 @@ function AppShell() {
   const segments = useSegments() as string[]; 
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
-  const hideTopBar = pathname?.startsWith("/home/onboarding");
+  const isLiveNav = pathname?.startsWith("/(courier)/navigate");
+  const hideTopBar = pathname?.startsWith("/home/onboarding") || isLiveNav;
   const isProfile = pathname?.startsWith("/profile");
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {!hideTopBar && (
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) }]}>
           {/* ✅ Switch global pour changer de rôle immédiatement */}
           {isProfile ? (
             <TouchableOpacity
@@ -165,8 +167,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginHorizontal: 12,
-    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+    minHeight: 56,
+    zIndex: 10,
   },
   button: {
     borderColor: Colors.accent,

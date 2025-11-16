@@ -189,6 +189,7 @@ export default function CourierNavigate() {
   const [loopModalVisible, setLoopModalVisible] = useState(false);
   const [loopDuration, setLoopDuration] = useState<number | null>(null);
   const [loopSelection, setLoopSelection] = useState<number>(60);
+  const [stopConfirmVisible, setStopConfirmVisible] = useState(false);
   const hourListRef = useRef<FlatList<number> | null>(null);
   const minuteListRef = useRef<FlatList<number> | null>(null);
   const loopIntentRef = useRef<"stay" | "toOffer" | "toLive">("stay");
@@ -1156,32 +1157,20 @@ useEffect(() => {
     const nextDistance = nextStep?.distance ?? liveDistMeters ?? 0;
     const nextDuration = nextStep?.duration ?? liveEtaSec ?? 0;
     const nextStepSummary = `${formatKm(nextDistance)} · ${formatETA(nextDuration)}`;
+    const routeBounds = (() => {
+      const coords = routeCoords.length > 1 ? routeCoords : null;
+      if (!coords) return null;
+      const lngs = coords.map((c) => c[0]);
+      const lats = coords.map((c) => c[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      return { ne: [maxLng, maxLat] as [number, number], sw: [minLng, minLat] as [number, number] };
+    })();
 
     return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#030712" }} edges={["top", "bottom"]}>
-      <View style={styles.liveInfoBar}>
-        <Text style={styles.liveInfoDestination}>{destLabel ?? "Destination inconnue"}</Text>
-        <Text style={styles.liveInfoStatus}>Trajet en cours</Text>
-        <View style={styles.liveInfoStats}>
-          <View style={styles.liveInfoStat}>
-            <Text style={styles.liveInfoLabel}>Heure d’arrivée</Text>
-            <Text style={styles.liveInfoValue}>{etaText}</Text>
-          </View>
-          <View style={styles.liveInfoStat}>
-            <Text style={styles.liveInfoLabel}>Distance restante</Text>
-            <Text style={styles.liveInfoValue}>{distText}</Text>
-          </View>
-          <View style={styles.liveInfoStat}>
-            <Text style={styles.liveInfoLabel}>Rémunération</Text>
-            <Text style={styles.liveInfoValue}>{selectedOffer?.hourly ?? "—"}</Text>
-          </View>
-          <View style={styles.liveInfoStat}>
-            <Text style={styles.liveInfoLabel}>Bonus estimé</Text>
-            <Text style={styles.liveInfoValue}>{bonusValue}</Text>
-          </View>
-        </View>
-      </View>
-
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#030712" }} edges={["bottom"]}>
       <View style={styles.mapContainer}>
         {(!target || loading) ? (
           <View style={styles.center}>
@@ -1195,12 +1184,27 @@ useEffect(() => {
             logoEnabled={false}
             attributionEnabled={false}
           >
-            <MapboxGL.Camera
-              centerCoordinate={[origin.lng, origin.lat]}
-              zoomLevel={remainMeters != null && remainMeters < 30 ? 18 : 12.5}
-              animationMode="flyTo"
-              animationDuration={700}
-            />
+            {routeBounds ? (
+              <MapboxGL.Camera
+                bounds={{
+                  ne: routeBounds.ne,
+                  sw: routeBounds.sw,
+                  paddingTop: 24,
+                  paddingBottom: 24,
+                  paddingLeft: 24,
+                  paddingRight: 24,
+                }}
+                animationMode="flyTo"
+                animationDuration={700}
+              />
+            ) : (
+              <MapboxGL.Camera
+                centerCoordinate={[origin.lng, origin.lat]}
+                zoomLevel={remainMeters != null && remainMeters < 30 ? 18 : 12.5}
+                animationMode="flyTo"
+                animationDuration={700}
+              />
+            )}
             <MapboxGL.UserLocation visible requestsAlwaysUse={false} showsUserHeadingIndicator />
             {routeCoords.length > 1 && (
               <MapboxGL.ShapeSource
@@ -1258,13 +1262,13 @@ useEffect(() => {
             >
               <IconSymbol name="qrcode.viewfinder" size={22} color={Colors.accent} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.controlIconBtn}
-              onPress={pauseActive ? handleResume : handlePausePress}
-              accessibilityLabel={pauseActive ? "Reprendre la course" : "Mettre la course en pause"}
-            >
-              <IconSymbol name={pauseActive ? "play.fill" : "pause.fill"} size={22} color={Colors.accent} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.controlIconBtn}
+                onPress={pauseActive ? handleResume : handlePausePress}
+                accessibilityLabel={pauseActive ? "Reprendre la course" : "Mettre la course en pause"}
+              >
+                <IconSymbol name={pauseActive ? "pause.fill" : "play.fill"} size={22} color={Colors.accent} />
+              </TouchableOpacity>
             <TouchableOpacity
               style={styles.controlIconBtn}
               onPress={() => setStopPickerOpen((prev) => !prev)}
@@ -1288,6 +1292,7 @@ useEffect(() => {
                   onPress={() => {
                     setStopReason(reason);
                     setStopPickerOpen(false);
+                    setStopConfirmVisible(true);
                   }}
                 >
                   <Text style={styles.dropdownOptionText}>{reason}</Text>
@@ -1312,8 +1317,12 @@ useEffect(() => {
       </View>
 
       <View style={styles.liveFooter}>
-        <Text style={styles.footerLabel}>Prochaine destination</Text>
-        <Text style={styles.footerValue}>{destAddress ?? "—"}</Text>
+        <Text style={styles.footerLabel}>Destination</Text>
+        <Text style={styles.footerValue}>{destLabel ?? destAddress ?? "—"}</Text>
+        <Text style={styles.footerLabel}>Heure d’arrivée</Text>
+        <Text style={styles.footerValue}>{etaText}</Text>
+        <Text style={styles.footerLabel}>Distance restante</Text>
+        <Text style={styles.footerValue}>{distText}</Text>
       </View>
     </SafeAreaView>
   );
@@ -1416,7 +1425,7 @@ useEffect(() => {
     </Modal>
   );
 
-  const renderLoopModal = () => (
+const renderLoopModal = () => (
     <Modal visible={loopModalVisible} transparent animationType="fade" onRequestClose={handleLoopCancel}>
       <View style={styles.loopModalOverlay}>
         <View style={styles.loopModalCard}>
@@ -1931,10 +1940,10 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     backgroundColor: "#040a13",
-    gap: 4,
+    gap: 6,
   },
-  footerLabel: { color: Colors.textSecondary, fontSize: 12 },
-  footerValue: { color: Colors.text, fontSize: 16, fontWeight: "600" },
+  footerLabel: { color: Colors.textSecondary, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  footerValue: { color: Colors.text, fontSize: 16, fontWeight: "700" },
   errorText: { color: "#ff6b6b" },
   errorTextSmall: { color: "#ff6b6b", fontSize: 12 },
   secondaryBtn: {

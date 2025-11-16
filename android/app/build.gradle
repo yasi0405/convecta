@@ -101,7 +101,7 @@ packagingOptions {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 6
-        versionName "1.0.28"
+        versionName "1.0.29"
     }
     signingConfigs {
         debug {
