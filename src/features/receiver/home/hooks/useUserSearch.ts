@@ -1,48 +1,54 @@
-import { useEffect, useRef, useState } from "react";
-import { searchUsers } from "../services/users";
+import { useEffect, useState } from "react";
+import { listAllUsers } from "../services/users";
 import type { RecipientUser } from "../types";
-
-export const MIN_USER_SEARCH_CHARS = 3;
 
 export function useUserSearch() {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<RecipientUser[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [allUsers, setAllUsers] = useState<RecipientUser[]>([]);
 
   useEffect(() => {
-    if (timer.current) clearTimeout(timer.current);
-
-    const trimmed = query.trim();
-    if (!trimmed || trimmed.length < MIN_USER_SEARCH_CHARS) {
-      setItems([]);
-      setOpen(false);
-      setLoading(false);
-      return () => {
-        if (timer.current) clearTimeout(timer.current);
-      };
-    }
-
-    // Avec saisie → recherche filtrée
-    timer.current = setTimeout(async () => {
+    let active = true;
+    (async () => {
       try {
         setLoading(true);
-        const res = await searchUsers(trimmed);
-        setItems(res);
-        setOpen(true);
-      } catch {
-        setItems([]);
-        setOpen(false);
+        const res = await listAllUsers({ pageSize: 200, maxPages: 20, authMode: "userPool" });
+        if (!active) return;
+        const mapped: RecipientUser[] = res.map((u) => ({
+          id: u.id,
+          displayName: u.displayName || u.email || "Utilisateur",
+          email: u.email,
+          defaultAddressLabel: (u as any)?.defaultAddressLabel || (u as any)?.address || undefined,
+        }));
+        console.log("[useUserSearch] utilisateurs chargés:", mapped);
+        setAllUsers(mapped);
+        setItems(mapped);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
-    }, 250);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [query]);
+  useEffect(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      setItems(allUsers);
+      return;
+    }
+    const filtered = allUsers.filter((u) => {
+      const name = u.displayName?.toLowerCase() ?? "";
+      const email = u.email?.toLowerCase() ?? "";
+      return name.includes(trimmed) || email.includes(trimmed);
+    });
+    setItems(filtered);
+  }, [query, allUsers]);
 
-  const needsMoreChars = Boolean(query.trim()) && query.trim().length < MIN_USER_SEARCH_CHARS;
+  const isEmpty = !loading && allUsers.length === 0;
 
-  return { query, setQuery, items, open, setOpen, loading, needsMoreChars };
+  return { query, setQuery, items, open, setOpen, loading, isEmpty };
 }

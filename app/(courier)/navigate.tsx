@@ -1,5 +1,5 @@
 // app/(courier)/navigate.tsx
-import type { Schema } from "@/amplify/data/resource";
+import type { Schema } from "@amplify/data/resource";
 import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import MapboxGL from "@rnmapbox/maps";
@@ -11,12 +11,12 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +24,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 const HAS_MAPBOX = Platform.OS !== "web" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
@@ -170,9 +171,17 @@ export default function CourierNavigate() {
   const pauseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [stopPickerOpen, setStopPickerOpen] = useState(false);
   const [stopReason, setStopReason] = useState<string | null>(null);
-  const [autoAssignLoading, setAutoAssignLoading] = useState(false);
-  const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
-  const [autoAssignedParcel, setAutoAssignedParcel] = useState<{ id: string; label: string; type?: string | null } | null>(null);
+  const [parcelSyncLoading, setParcelSyncLoading] = useState(false);
+  const [parcelSyncError, setParcelSyncError] = useState<string | null>(null);
+  const [activeParcel, setActiveParcel] = useState<{
+    id: string;
+    adresseDepart?: string | null;
+    adresseArrivee?: string | null;
+    status?: string | null;
+    type?: string | null;
+  } | null>(null);
+  const [deliveryPhase, setDeliveryPhase] = useState<"pickup" | "dropoff">("pickup");
+  const [parcelWaypoints, setParcelWaypoints] = useState<{ pickup: Coords | null; dropoff: Coords | null } | null>(null);
   const [courierId, setCourierId] = useState<string | null>(null);
   const [startConfirmVisible, setStartConfirmVisible] = useState(false);
   const startConfirmDurationRef = useRef<number | null>(null);
@@ -187,6 +196,9 @@ export default function CourierNavigate() {
   const [customResults, setCustomResults] = useState<LocationSuggestion[]>([]);
   const [customSearchLoading, setCustomSearchLoading] = useState(false);
   const [customSearchError, setCustomSearchError] = useState<string | null>(null);
+  const [previewRoute, setPreviewRoute] = useState<[number, number][]>([]);
+  const [previewBounds, setPreviewBounds] = useState<{ ne: [number, number]; sw: [number, number] } | null>(null);
+  const [previewLineWidth, setPreviewLineWidth] = useState(10);
 
 const scrollPickersTo = (value: number, animated = true) => {
   const hoursVal = Math.floor(value / 60);
@@ -248,9 +260,12 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     setNextStep(null);
     setRouteCoords([]);
     setError(null);
-    setAutoAssignLoading(false);
-    setAutoAssignError(null);
-    setAutoAssignedParcel(null);
+    setParcelSyncLoading(false);
+    setParcelSyncError(null);
+    setActiveParcel(null);
+    setParcelWaypoints(null);
+    setDeliveryPhase("pickup");
+    setLiveStatus("ongoing");
     setPauseActive(false);
     setPauseRemaining(null);
     setStopReason(null);
@@ -308,10 +323,81 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     [closeLoopModal]
   );
 
-  const handleAutoAssignDismiss = () => {
-    setAutoAssignError(null);
+  const handleParcelErrorDismiss = () => {
+    setParcelSyncError(null);
     goBackToDest();
   };
+
+  const fetchActiveParcel = useCallback(async () => {
+    if (!courierId) return null;
+    try {
+      setParcelSyncLoading(true);
+      setParcelSyncError(null);
+      const res = await client.models.Parcel.list({
+        filter: {
+          assignedTo: { eq: courierId },
+          or: [
+            { status: { eq: "ASSIGNED" } },
+            { status: { eq: "IN_PROGRESS" } },
+            { status: { eq: "DELIVERING" } },
+          ],
+        },
+        limit: 50,
+        authMode: "userPool",
+      } as any);
+      const parcels = extractParcels(res);
+      const parcel = parcels.find((p: any) => p?.id);
+      if (!parcel) {
+        setParcelSyncError(
+          "Aucun colis assigné. Ajoute un colis via l’onglet « Mes colis » avant de démarrer la navigation."
+        );
+        return null;
+      }
+      setActiveParcel(parcel);
+      return parcel;
+    } catch (error) {
+      setParcelSyncError("Impossible de récupérer tes colis assignés.");
+      return null;
+    } finally {
+      setParcelSyncLoading(false);
+    }
+  }, [courierId]);
+
+  const ensureParcelWaypoints = useCallback(
+    async (parcel: { adresseDepart?: string | null; adresseArrivee?: string | null }) => {
+      const pickupAddress = parcel.adresseDepart?.trim();
+      const dropoffAddress = parcel.adresseArrivee?.trim();
+      if (!pickupAddress || !dropoffAddress) {
+        setParcelSyncError("Les adresses du colis sont incomplètes.");
+        return null;
+      }
+      if (parcelWaypoints?.pickup && parcelWaypoints?.dropoff) {
+        return parcelWaypoints;
+      }
+      try {
+        setParcelSyncLoading(true);
+        const [pickupResults, dropoffResults] = await Promise.all([
+          geocodePlaces(pickupAddress),
+          geocodePlaces(dropoffAddress),
+        ]);
+        const pickup = pickupResults?.[0]?.coords ?? null;
+        const dropoff = dropoffResults?.[0]?.coords ?? null;
+        if (!pickup || !dropoff) {
+          setParcelSyncError("Impossible de localiser les adresses du colis.");
+          return null;
+        }
+        const coords = { pickup, dropoff };
+        setParcelWaypoints(coords);
+        return coords;
+      } catch (error) {
+        setParcelSyncError("Erreur lors de la localisation des adresses du colis.");
+        return null;
+      } finally {
+        setParcelSyncLoading(false);
+      }
+    },
+    [parcelWaypoints]
+  );
 
   const handleAcceptOffer = () => {
     if (!selectedDestination || !selectedOffer) return;
@@ -364,6 +450,15 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
   // 2. Set destination coordinates without web fetch
   useEffect(() => {
     if (stage !== "live") return;
+    if (parcelWaypoints) {
+      const waypoint =
+        deliveryPhase === "pickup" ? parcelWaypoints.pickup : parcelWaypoints.dropoff;
+      if (waypoint) {
+        setTarget(waypoint);
+        setError(null);
+        return;
+      }
+    }
     if (!selectedDestination) return;
     if (selectedDestination.id === "loop") {
       if (origin) setTarget(origin);
@@ -376,7 +471,7 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     }
     setTarget(null);
     setError("Destination indisponible sans coordonnées pré-configurées.");
-  }, [stage, selectedDestination, origin]);
+  }, [stage, parcelWaypoints, deliveryPhase, selectedDestination, origin]);
 
   // 3. Directions polling (local estimation only)
   useEffect(() => {
@@ -413,13 +508,19 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
         }
         if (cancelled) return;
 
-        const coords =
-          mapboxRoute?.coordinates?.length && mapboxRoute.coordinates.length > 1
-            ? mapboxRoute.coordinates
-            : [
-                [current.lng, current.lat],
-                [target.lng, target.lat],
-              ];
+        const coords = (() => {
+          const raw = Array.isArray(mapboxRoute?.coordinates) ? mapboxRoute.coordinates : [];
+          const normalized = raw
+            .map((c: any) =>
+              Array.isArray(c) && c.length >= 2 ? [Number(c[0]), Number(c[1])] as [number, number] : null,
+            )
+            .filter(Boolean) as [number, number][];
+          if (normalized.length > 1) return normalized;
+          return [
+            [current.lng, current.lat],
+            [target.lng, target.lat],
+          ] as [number, number][];
+        })();
 
         const meters =
           mapboxRoute && Number.isFinite(mapboxRoute.distance)
@@ -501,6 +602,10 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
   }, [pauseActive]);
 
   const handleOpenScanner = async () => {
+    if (!activeParcel) {
+      Alert.alert("Aucun colis", "Ajoute un colis dans ta liste avant de scanner.");
+      return;
+    }
     if (!permission?.granted) {
       const granted = await requestPermission();
       if (!granted?.granted) {
@@ -514,56 +619,36 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     setScanVisible(true);
   };
 
-  const handleScannedCode = (data: string) => {
-    if (scannedOnce) return;
+  const handleScannedCode = async (data: string) => {
+    if (scannedOnce || !activeParcel?.id) return;
     setScannedOnce(true);
     setScanBusy(true);
     setScanMsg("Validation…");
-    setTimeout(() => {
-      setLiveStatus("completed");
-      setScanMsg("Colis validé ✅");
-      setScanBusy(false);
-      setTimeout(() => setScanVisible(false), 700);
-    }, 1200);
-  };
-
-  const autoAssignNearestParcel = async (destination: Destination) => {
-    if (!courierId) return;
     try {
-      setAutoAssignLoading(true);
-      setAutoAssignError(null);
-      setAutoAssignedParcel(null);
-
-      const res = await client.models.Parcel.list({
-        filter: { status: { eq: "AVAILABLE" } },
-        limit: 30,
-        authMode: "userPool",
-      });
-      const parcels = extractParcels(res);
-      const candidate = parcels.find((parcel: any) => parcel?.id);
-
-      if (!candidate?.id) {
-        setAutoAssignError("Aucun colis compatible trouvé pour ce trajet.");
-        return;
-      }
-
+      const nextStatus = deliveryPhase === "pickup" ? "IN_PROGRESS" : "DELIVERED";
       await client.models.Parcel.update({
-        id: candidate.id,
-        status: "ASSIGNED",
-        assignedTo: courierId,
+        id: activeParcel.id,
+        status: nextStatus,
         updatedAt: new Date().toISOString(),
         authMode: "userPool",
-      });
-
-      setAutoAssignedParcel({
-        id: candidate.id,
-        label: candidate.adresseDepart ?? destination.label,
-        type: candidate.type ?? null,
-      });
-    } catch (e) {
-      setAutoAssignError("Impossible d'assigner automatiquement un colis.");
+      } as any);
+      if (deliveryPhase === "pickup") {
+        setDeliveryPhase("dropoff");
+        const dropAddress = activeParcel.adresseArrivee ?? destAddress;
+        setDestAddress(dropAddress);
+        setDestLabel(dropAddress ?? destLabel ?? "Livraison");
+        setScanMsg("Colis récupéré ✅");
+      } else {
+        setScanMsg("Colis livré ✅");
+        setLiveStatus("completed");
+      }
+    } catch (error) {
+      setScanMsg("Erreur lors de la mise à jour du colis.");
+      setScannedOnce(false);
+      return;
     } finally {
-      setAutoAssignLoading(false);
+      setScanBusy(false);
+      setTimeout(() => setScanVisible(false), 700);
     }
   };
 
@@ -596,17 +681,27 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
   const formatLoopAddressLabel = (mins?: number | null) =>
     mins ? `Boucle locale (${formatDurationLabel(mins)})` : "Boucle locale";
 
-  const startLiveNavigation = (durationOverride?: number) => {
+  const startLiveNavigation = async (_durationOverride?: number) => {
     if (!selectedDestination || !selectedOffer) return;
-    setDestLabel(selectedDestination.label);
-    if (selectedDestination.id === "loop") {
-      const durationValue = durationOverride ?? loopDuration ?? loopSelection;
-      setDestAddress(formatLoopAddressLabel(durationValue));
-    } else {
-      setDestAddress(selectedDestination.query || selectedDestination.label);
-    }
+    const parcel = activeParcel ?? (await fetchActiveParcel());
+    if (!parcel) return;
+    const coords = (parcelWaypoints ?? (await ensureParcelWaypoints(parcel))) ?? null;
+    if (!coords?.pickup || !coords?.dropoff) return;
+
+    const resumePhase =
+      parcel.status === "IN_PROGRESS" || parcel.status === "DELIVERING" ? "dropoff" : "pickup";
+    setDeliveryPhase(resumePhase);
+
+    const addressLabel =
+      resumePhase === "pickup"
+        ? parcel.adresseDepart ?? selectedDestination.label
+        : parcel.adresseArrivee ?? selectedDestination.label;
+
+    setDestLabel(addressLabel ?? selectedDestination.label);
+    setDestAddress(addressLabel ?? selectedDestination.label);
     setStage("live");
-    autoAssignNearestParcel(selectedDestination);
+    setLiveStatus("ongoing");
+    setTarget(resumePhase === "pickup" ? coords.pickup : coords.dropoff);
   };
 
   function requestStartConfirmation(durationOverride?: number) {
@@ -644,6 +739,75 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     closeLoopModal();
     if (!loopDuration) setSelectedDestination(null);
   };
+
+  useEffect(() => {
+    const coords = selectedDestination?.coords;
+    if (!coords) {
+      setPreviewRoute([]);
+      setPreviewBounds(null);
+      return;
+    }
+
+    let cancelled = false;
+    const computePreview = async () => {
+      const destCoord: [number, number] = [coords.lng, coords.lat];
+
+      // ligne plus épaisse selon l'offre
+      const width =
+        selectedOffer?.id === "eco"
+          ? 8
+          : selectedOffer?.id === "balanced"
+            ? 10
+            : selectedOffer?.id === "max"
+              ? 12
+              : 10;
+      setPreviewLineWidth(width);
+
+      let start: [number, number] = [destCoord[0] - 0.25, destCoord[1] - 0.18];
+      try {
+        const last = await Location.getLastKnownPositionAsync();
+        if (last?.coords) {
+          start = [last.coords.longitude, last.coords.latitude];
+        }
+      } catch {
+        // silent fallback
+      }
+
+      const route = await fetchMapboxDirections(
+        { lat: start[1], lng: start[0] },
+        { lat: destCoord[1], lng: destCoord[0] },
+      );
+      const routeCoords = (() => {
+        const raw = Array.isArray(route?.coordinates) ? route.coordinates : [];
+        const normalized = raw
+          .map((c: any) =>
+            Array.isArray(c) && c.length >= 2 ? [Number(c[0]), Number(c[1])] as [number, number] : null,
+          )
+          .filter(Boolean) as [number, number][];
+        if (normalized.length > 1) return normalized;
+        return [start, destCoord];
+      })();
+
+      if (cancelled) return;
+      setPreviewRoute(routeCoords);
+
+      const lngs = routeCoords.map((c) => c[0]);
+      const lats = routeCoords.map((c) => c[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      setPreviewBounds({
+        sw: [minLng, minLat],
+        ne: [maxLng, maxLat],
+      });
+    };
+
+    computePreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDestination, selectedOffer]);
 
   useEffect(() => {
     (async () => {
@@ -877,37 +1041,103 @@ useEffect(() => {
     }
     return (
       <SafeAreaView style={styles.pickScreen}>
-        <View style={styles.offerHeader}>
-          <TouchableOpacity onPress={() => setStage("dest")}>
-            <Text style={styles.backLink}>← Changer de destination</Text>
-          </TouchableOpacity>
-          <Text style={styles.offerTitle}>{selectedDestination.label}</Text>
-          <Text style={styles.offerSubtitle}>{selectedDestination.missions}</Text>
+        <View style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 180 }}>
+            <View style={[styles.offerHeader, { paddingHorizontal: 20 }]}>
+            <TouchableOpacity onPress={() => setStage("dest")}>
+              <Text style={styles.backLink}>← Changer de destination</Text>
+            </TouchableOpacity>
+            <Text style={styles.offerTitle}>{selectedDestination.label}</Text>
+            <Text style={styles.offerSubtitle}>{selectedDestination.missions}</Text>
+          </View>
+
+          <View style={styles.previewCard}>
+            <View style={styles.previewMap}>
+              {HAS_MAPBOX && previewRoute.length > 1 ? (
+                <MapboxGL.MapView
+                  style={{ flex: 1 }}
+                  styleURL={MapboxGL.StyleURL.Dark}
+                  zoomEnabled={false}
+                  scrollEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  compassEnabled={false}
+                  logoEnabled={false}
+                  attributionEnabled={false}
+                >
+                  {previewBounds ? (
+                    <MapboxGL.Camera
+                      bounds={{
+                        ne: previewBounds.ne,
+                        sw: previewBounds.sw,
+                        paddingTop: 20,
+                        paddingBottom: 20,
+                        paddingLeft: 24,
+                        paddingRight: 24,
+                      }}
+                    />
+                  ) : null}
+                  <MapboxGL.ShapeSource
+                    id="preview-route"
+                    shape={{
+                      type: "Feature",
+                      geometry: {
+                        type: "LineString",
+                        coordinates: previewRoute,
+                      },
+                      properties: {},
+                    }}
+                  >
+                    <MapboxGL.LineLayer
+                      id="preview-line"
+                      style={{
+                        lineWidth: previewLineWidth,
+                        lineColor: Colors.accent,
+                        lineCap: "round",
+                        lineJoin: "round",
+                        lineOpacity: 0.9,
+                      }}
+                    />
+                  </MapboxGL.ShapeSource>
+                </MapboxGL.MapView>
+              ) : (
+                <View style={[styles.previewFallback, { alignItems: "center", justifyContent: "center" }]}>
+                  <ActivityIndicator color={Colors.accent} />
+                  <Text style={styles.previewDotLabel}>Prévisualisation de l’itinéraire…</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+            <View style={styles.offerGrid}>
+            {OFFER_PRESETS.map((offer) => {
+              const active = selectedOffer?.id === offer.id;
+              return (
+                <TouchableOpacity
+                  key={offer.id}
+                  style={[styles.offerCard, styles.offerCardFull, active && styles.offerCardActive]}
+                  onPress={() => setSelectedOffer(offer)}
+                >
+                  <View style={styles.offerCardRow}>
+                    <Text style={styles.offerCardTitle}>{offer.title}</Text>
+                    <Text style={styles.offerHourly}>{offer.hourly}</Text>
+                  </View>
+                  <Text style={styles.offerDuration}>{offer.duration}</Text>
+                  <Text style={styles.offerDescription} numberOfLines={3}>
+                    {offer.description}
+                  </Text>
+                  <View style={styles.offerMetaRow}>
+                    <Text style={styles.offerMeta}>Bonus {offer.bonus}</Text>
+                    <Text style={styles.offerMeta}>{offer.distance}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            </View>
+          </ScrollView>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
-          {OFFER_PRESETS.map((offer) => {
-            const active = selectedOffer?.id === offer.id;
-            return (
-              <TouchableOpacity
-                key={offer.id}
-                style={[styles.offerCard, active && styles.offerCardActive]}
-                onPress={() => setSelectedOffer(offer)}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={styles.offerCardTitle}>{offer.title}</Text>
-                  <Text style={styles.offerHourly}>{offer.hourly}</Text>
-                </View>
-                <Text style={styles.offerDescription}>{offer.description}</Text>
-                <View style={styles.offerMetaRow}>
-                  <Text style={styles.offerMeta}>Durée estimée : {offer.duration}</Text>
-                  <Text style={styles.offerMeta}>Distance : {offer.distance}</Text>
-                </View>
-                <Text style={styles.offerBonus}>{offer.bonus} de bonus potentiel</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-        <View style={styles.ctaBar}>
+
+        <View style={[styles.ctaBar, styles.ctaBarFloating]}>
           <TouchableOpacity
             style={[styles.primaryBtn, !selectedOffer && { opacity: 0.4 }]}
             disabled={!selectedOffer}
@@ -922,7 +1152,7 @@ useEffect(() => {
 
   const renderLiveStage = () => {
     const bonusValue =
-      autoAssignedParcel?.type?.toLowerCase() === "express" ? selectedOffer?.bonus ?? "" : "";
+      activeParcel?.type?.toLowerCase() === "express" ? selectedOffer?.bonus ?? "" : "";
     const nextDistance = nextStep?.distance ?? liveDistMeters ?? 0;
     const nextDuration = nextStep?.duration ?? liveEtaSec ?? 0;
     const nextStepSummary = `${formatKm(nextDistance)} · ${formatETA(nextDuration)}`;
@@ -989,6 +1219,26 @@ useEffect(() => {
                 />
               </MapboxGL.ShapeSource>
             )}
+            {parcelWaypoints?.pickup && (
+              <MapboxGL.PointAnnotation
+                id="pickup-marker"
+                coordinate={[parcelWaypoints.pickup.lng, parcelWaypoints.pickup.lat]}
+              >
+                <View style={[styles.markerBase, styles.markerPickup]}>
+                  <IconSymbol name="shippingbox.fill" size={16} color={Colors.background} />
+                </View>
+              </MapboxGL.PointAnnotation>
+            )}
+            {parcelWaypoints?.dropoff && (
+              <MapboxGL.PointAnnotation
+                id="dropoff-marker"
+                coordinate={[parcelWaypoints.dropoff.lng, parcelWaypoints.dropoff.lat]}
+              >
+                <View style={[styles.markerBase, styles.markerDropoff]}>
+                  <IconSymbol name="house.fill" size={16} color={Colors.background} />
+                </View>
+              </MapboxGL.PointAnnotation>
+            )}
           </MapboxGL.MapView>
         ) : (
           <View style={styles.mapFallback}>
@@ -1045,13 +1295,17 @@ useEffect(() => {
               ))}
             </View>
           )}
-          {autoAssignLoading && (
-            <Text style={styles.controlSubtitle}>Recherche d'un colis proche…</Text>
+          {parcelSyncLoading && (
+            <Text style={styles.controlSubtitle}>Préparation du colis assigné…</Text>
           )}
-          {autoAssignedParcel && (
+          {activeParcel && (
             <View style={styles.autoAssignRow}>
               <IconSymbol name="cube.box.fill" size={18} color={Colors.accent} />
-              <Text style={styles.controlSubtitle}>{autoAssignedParcel.label}</Text>
+              <Text style={styles.controlSubtitle}>
+                {deliveryPhase === "pickup"
+                  ? activeParcel.adresseDepart ?? "Adresse expéditeur"
+                  : activeParcel.adresseArrivee ?? "Adresse destinataire"}
+              </Text>
             </View>
           )}
         </View>
@@ -1138,22 +1392,22 @@ useEffect(() => {
     </Modal>
   );
 
-  const renderAutoAssignErrorModal = () => (
+  const renderParcelErrorModal = () => (
     <Modal
-      visible={!!autoAssignError}
+      visible={!!parcelSyncError}
       transparent
       animationType="fade"
-      onRequestClose={handleAutoAssignDismiss}
+      onRequestClose={handleParcelErrorDismiss}
     >
       <View style={styles.confirmOverlay}>
         <View style={styles.confirmCard}>
-          <Text style={styles.confirmTitle}>Aucun colis compatible</Text>
+          <Text style={styles.confirmTitle}>Colis requis</Text>
           <Text style={styles.confirmMessage}>
-            {autoAssignError ?? "Ce trajet ne dispose d'aucune cargaison compatible."}
+            {parcelSyncError ?? "Ajoute un colis dans ta liste avant de démarrer une navigation."}
           </Text>
           <TouchableOpacity
             style={[styles.confirmBtn, styles.confirmBtnPrimary]}
-            onPress={handleAutoAssignDismiss}
+            onPress={handleParcelErrorDismiss}
           >
             <Text style={styles.confirmBtnText}>Retour course</Text>
           </TouchableOpacity>
@@ -1175,7 +1429,9 @@ useEffect(() => {
             <View style={styles.loopPicker}>
               <View style={styles.loopPickerColumn}>
                 <FlatList
-                  ref={(ref) => (hourListRef.current = ref)}
+                  ref={(ref) => {
+                    hourListRef.current = ref;
+                  }}
                   data={LOOP_HOUR_OPTIONS}
                   keyExtractor={(item) => item.toString()}
                   showsVerticalScrollIndicator={false}
@@ -1204,7 +1460,9 @@ useEffect(() => {
               </View>
               <View style={styles.loopPickerColumn}>
                 <FlatList
-                  ref={(ref) => (minuteListRef.current = ref)}
+                  ref={(ref) => {
+                    minuteListRef.current = ref;
+                  }}
                   data={LOOP_MINUTE_OPTIONS}
                   keyExtractor={(item) => item.toString()}
                   showsVerticalScrollIndicator={false}
@@ -1259,7 +1517,7 @@ useEffect(() => {
       {renderLoopModal()}
       {renderScanModal()}
       {renderStartConfirmModal()}
-      {renderAutoAssignErrorModal()}
+      {renderParcelErrorModal()}
     </>
   );
 }
@@ -1504,10 +1762,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryBtnText: { color: Colors.background, fontWeight: "800", letterSpacing: 0.5 },
+  ctaBarFloating: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#050910",
+    paddingBottom: 24,
+  },
   offerHeader: { padding: 24, paddingBottom: 12 },
   backLink: { color: Colors.accent, fontSize: 14, marginBottom: 8 },
   offerTitle: { color: Colors.text, fontSize: 22, fontWeight: "700" },
   offerSubtitle: { color: Colors.textSecondary, marginTop: 2 },
+  previewCard: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    backgroundColor: "#101721",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+  },
+  previewMap: {
+    height: 190,
+    borderRadius: 14,
+    backgroundColor: "#121a24",
+    overflow: "hidden",
+  },
+  previewFallback: {
+    flex: 1,
+    backgroundColor: "#121a24",
+  },
+  previewDotLabel: { color: Colors.textSecondary, fontSize: 12 },
+  offerGrid: {
+    paddingHorizontal: 20,
+    gap: 12,
+    paddingTop: 16,
+  },
   offerCard: {
     backgroundColor: Colors.card,
     padding: 16,
@@ -1516,6 +1807,11 @@ const styles = StyleSheet.create({
     borderColor: "#1f2937",
     gap: 6,
   },
+  offerCardFull: {
+    width: "100%",
+    alignSelf: "stretch",
+  },
+  offerCardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   offerCardActive: {
     borderColor: Colors.accent,
     shadowColor: Colors.accent,
@@ -1526,6 +1822,7 @@ const styles = StyleSheet.create({
   offerCardTitle: { color: Colors.text, fontSize: 18, fontWeight: "700" },
   offerHourly: { color: Colors.accent, fontSize: 16, fontWeight: "700" },
   offerDescription: { color: Colors.textSecondary },
+  offerDuration: { color: Colors.text, fontSize: 20, fontWeight: "700" },
   offerMetaRow: { flexDirection: "row", justifyContent: "space-between" },
   offerMeta: { color: Colors.textSecondary },
   offerBonus: { color: Colors.text, fontWeight: "600", marginTop: 4 },
@@ -1612,6 +1909,21 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  markerBase: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  markerPickup: {
+    backgroundColor: Colors.accent,
+  },
+  markerDropoff: {
+    backgroundColor: Colors.card,
   },
   overlayHint: { color: Colors.textSecondary, marginBottom: 6, fontSize: 12 },
   liveFooter: {

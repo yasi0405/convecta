@@ -1,6 +1,6 @@
 {
   "name": "convecta",
-  "version": "1.0.26",
+  "version": "1.0.28",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -26,6 +26,9 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "@rnmapbox/maps": "^10.2.6",
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/buffer": "^7.2.0",
+    "@turf/helpers": "^7.2.0",
     "aws-amplify": "^6.15.3",
     "expo": "~53.0.23",
     "expo-asset": "~11.1.7",
