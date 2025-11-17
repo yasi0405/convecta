@@ -65,6 +65,7 @@ module.exports = ({ config }) => ({
         },
       ],
       ["expo-camera"],
+      ["expo-dev-client"],
       [
         "@rnmapbox/maps",
         {
