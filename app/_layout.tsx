@@ -1,5 +1,5 @@
 import { useFonts } from 'expo-font';
-import { Stack, usePathname, useSegments, useRouter, type Href } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import 'react-native-reanimated';
@@ -9,10 +9,10 @@ import { ParcelProvider } from '@/context/ParcelContext';
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
 
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import Colors from "@/theme/Colors";
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { IconSymbol } from "@/components/ui/IconSymbol";
 import outputs from "../amplify_outputs.json";
 
 Amplify.configure(outputs);
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingBottom: 4,
-    minHeight: 56,
+    marginHorizontal: 12,
     zIndex: 10,
   },
   button: {
