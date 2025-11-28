@@ -23,9 +23,10 @@ Convecta is the Expo + React Native mobile app that powers the Receiver and Cour
 
 ## Prerequisites
 
-- Node.js 18+ (ideally via `nvm`), npm 10+.
+- Node.js 18+ (ideally via `nvm`); use Node 20 LTS for Amplify tooling (Node 25 currently breaks `npx ampx sandbox` via `@typescript/vfs`).
 - Expo CLI (`npx expo`) and EAS CLI (`npm i -g eas-cli` if needed).
 - Xcode + Cocoapods (for iOS) / Android Studio (for Android).
+- AWS Amplify CLI globally installed for the `amplify` command (`npm i -g @aws-amplify/cli`).
 - AWS access (Amplify profiles & permissions). Configure your credentials (`aws configure sso` or `aws configure`) before launching the backend.
 
 ## Installation
@@ -51,6 +52,7 @@ This spins up or refreshes isolated backend resources. The first run will prompt
 ### 2. Expo app (dev client, simulators, Expo Go)
 
 ```bash
+npx expo start --dev-client  # Metro for dev builds (use with custom clients)
 npx expo start            # Metro dashboard + QR code
 npx expo run:ios          # local iOS build (avoid sudo)
 npx expo run:android      # local Android build

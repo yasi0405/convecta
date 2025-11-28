@@ -1,7 +1,7 @@
 // app/(courier)/navigate.tsx
-import type { Schema } from "@amplify/data/resource";
-import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import Colors from "@/theme/Colors";
+import type { Schema } from "@amplify/data/resource";
 import MapboxGL from "@rnmapbox/maps";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";

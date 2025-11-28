@@ -56,7 +56,7 @@ export function EstimateCard({
           <View style={[styles.bottomCol, styles.bottomColRight]}>
             <Text style={styles.bottomLabel}>Frais estimés</Text>
             <Text style={styles.bottomBig}>{fmtEUR(commissionEUR)}</Text>
-            <Text style={styles.bottomHint}>1€ + 0.4€/km</Text>
+            <Text style={styles.bottomHint}>0.4€/km</Text>
           </View>
         </View>
       )}

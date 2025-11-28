@@ -1,9 +1,9 @@
 {
   "auth": {
-    "user_pool_id": "us-east-1_1leYWIKoS",
+    "user_pool_id": "us-east-1_yhihlzXZZ",
     "aws_region": "us-east-1",
-    "user_pool_client_id": "12fumjjt9oc4jije3g4gl8881p",
-    "identity_pool_id": "us-east-1:5ab1da90-7709-4089-a989-8dfc842a3c52",
+    "user_pool_client_id": "1pgcu858jts248cjcpugbbs50g",
+    "identity_pool_id": "us-east-1:bb30d1c3-69c3-49dc-a2c5-c91e2bff368e",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email"
@@ -26,7 +26,7 @@
     "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://j3p26gdxfnh2tpiobp4pgq5jzu.appsync-api.us-east-1.amazonaws.com/graphql",
+    "url": "https://64d2ncqzgjg3rfttd5vg7izscq.appsync-api.us-east-1.amazonaws.com/graphql",
     "aws_region": "us-east-1",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
     "authorization_types": [
@@ -770,11 +770,11 @@
   },
   "storage": {
     "aws_region": "us-east-1",
-    "bucket_name": "amplify-convecta-root-san-convectauploadsbucket792-7ed2bwy4e7sq",
+    "bucket_name": "amplify-convecta-simonyan-convectauploadsbucket792-gqmyp6agnjpz",
     "buckets": [
       {
         "name": "convectaUploads",
-        "bucket_name": "amplify-convecta-root-san-convectauploadsbucket792-7ed2bwy4e7sq",
+        "bucket_name": "amplify-convecta-simonyan-convectauploadsbucket792-gqmyp6agnjpz",
         "aws_region": "us-east-1",
         "paths": {
           "kyc/${cognito-identity.amazonaws.com:sub}/*": {
