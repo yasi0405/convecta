@@ -1,0 +1,145 @@
+0 verbose cli /Users/simonyannick/.nvm/versions/node/v20.19.5/bin/node /Users/simonyannick/.nvm/versions/node/v20.19.5/bin/npm
+1 info using npm@10.8.2
+2 info using node@v20.19.5
+3 silly config load:file:/Users/simonyannick/.nvm/versions/node/v20.19.5/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/simonyannick/Apps/convecta/.npmrc
+5 silly config load:file:/Users/simonyannick/.npmrc
+6 silly config load:file:/Users/simonyannick/.nvm/versions/node/v20.19.5/etc/npmrc
+7 verbose title npm install
+8 verbose argv "install" "--package-lock-only" "--ignore-scripts" "--no-audit" "--no-fund" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:/Users/simonyannick/Apps/convecta/.npm-cache/_logs/2025-11-29T14_13_12_921Z-
+10 verbose logfile /Users/simonyannick/Apps/convecta/.npm-cache/_logs/2025-11-29T14_13_12_921Z-debug-0.log
+11 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+12 silly logfile done cleaning log files
+13 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with ENOTFOUND
+14 silly idealTree buildDeps
+15 silly fetch manifest @aws-cdk/cli-plugin-contract@^2
+16 silly packumentCache full:https://registry.npmjs.org/@aws-cdk%2fcli-plugin-contract cache-miss
+17 http fetch GET https://registry.npmjs.org/@aws-cdk%2fcli-plugin-contract attempt 1 failed with ENOTFOUND
+18 http fetch GET https://registry.npmjs.org/npm attempt 2 failed with ENOTFOUND
+19 http fetch GET https://registry.npmjs.org/@aws-cdk%2fcli-plugin-contract attempt 2 failed with ENOTFOUND
+20 http fetch GET https://registry.npmjs.org/npm attempt 3 failed with ENOTFOUND
+21 http fetch GET https://registry.npmjs.org/@aws-cdk%2fcli-plugin-contract attempt 3 failed with ENOTFOUND
+22 silly placeDep ROOT @aws-cdk/cli-plugin-contract@ OK for: @aws-cdk/toolkit-lib@1.6.1 want: ^2
+23 warn ERESOLVE overriding peer dependency {
+23 warn ERESOLVE   code: 'ERESOLVE',
+23 warn ERESOLVE   edge: {
+23 warn ERESOLVE     type: 'peer',
+23 warn ERESOLVE     name: '@aws-cdk/cli-plugin-contract',
+23 warn ERESOLVE     spec: '^2',
+23 warn ERESOLVE     error: 'INVALID',
+23 warn ERESOLVE     from: {
+23 warn ERESOLVE       name: '@aws-cdk/toolkit-lib',
+23 warn ERESOLVE       version: '1.6.1',
+23 warn ERESOLVE       location: 'node_modules/@aws-cdk/toolkit-lib',
+23 warn ERESOLVE       isWorkspace: false,
+23 warn ERESOLVE       dependents: [Array]
+23 warn ERESOLVE     }
+23 warn ERESOLVE   },
+23 warn ERESOLVE   dep: {
+23 warn ERESOLVE     name: '@aws-cdk/cli-plugin-contract',
+23 warn ERESOLVE     version: undefined,
+23 warn ERESOLVE     errors: [ [FetchError] ],
+23 warn ERESOLVE     package: {},
+23 warn ERESOLVE     whileInstalling: {
+23 warn ERESOLVE       name: '@aws-cdk/toolkit-lib',
+23 warn ERESOLVE       version: '1.6.1',
+23 warn ERESOLVE       path: '/Users/simonyannick/Apps/convecta/node_modules/@aws-cdk/toolkit-lib'
+23 warn ERESOLVE     },
+23 warn ERESOLVE     location: 'node_modules/@aws-cdk/cli-plugin-contract',
+23 warn ERESOLVE     isWorkspace: false,
+23 warn ERESOLVE     dependents: [ [Object] ]
+23 warn ERESOLVE   },
+23 warn ERESOLVE   force: false,
+23 warn ERESOLVE   isMine: false,
+23 warn ERESOLVE   strictPeerDeps: false,
+23 warn ERESOLVE   current: {
+23 warn ERESOLVE     name: '@aws-cdk/cli-plugin-contract',
+23 warn ERESOLVE     version: undefined,
+23 warn ERESOLVE     errors: [ [FetchError] ],
+23 warn ERESOLVE     package: {},
+23 warn ERESOLVE     location: 'node_modules/@aws-cdk/cli-plugin-contract',
+23 warn ERESOLVE     isWorkspace: false,
+23 warn ERESOLVE     dependents: []
+23 warn ERESOLVE   }
+23 warn ERESOLVE }
+24 silly fetch manifest react-native-worklets@>=0.5.0
+25 silly packumentCache full:https://registry.npmjs.org/react-native-worklets cache-miss
+26 http fetch GET https://registry.npmjs.org/react-native-worklets attempt 1 failed with ENOTFOUND
+27 http fetch GET https://registry.npmjs.org/react-native-worklets attempt 2 failed with ENOTFOUND
+28 http fetch GET https://registry.npmjs.org/react-native-worklets attempt 3 failed with ENOTFOUND
+29 silly placeDep ROOT react-native-worklets@ OK for: react-native-reanimated@4.1.5 want: >=0.5.0
+30 warn ERESOLVE overriding peer dependency {
+30 warn ERESOLVE   code: 'ERESOLVE',
+30 warn ERESOLVE   edge: {
+30 warn ERESOLVE     type: 'peer',
+30 warn ERESOLVE     name: 'react-native-worklets',
+30 warn ERESOLVE     spec: '>=0.5.0',
+30 warn ERESOLVE     error: 'INVALID',
+30 warn ERESOLVE     from: {
+30 warn ERESOLVE       name: 'react-native-reanimated',
+30 warn ERESOLVE       version: '4.1.5',
+30 warn ERESOLVE       location: 'node_modules/react-native-reanimated',
+30 warn ERESOLVE       isWorkspace: false,
+30 warn ERESOLVE       dependents: [Array]
+30 warn ERESOLVE     }
+30 warn ERESOLVE   },
+30 warn ERESOLVE   dep: {
+30 warn ERESOLVE     name: 'react-native-worklets',
+30 warn ERESOLVE     version: undefined,
+30 warn ERESOLVE     errors: [ [FetchError] ],
+30 warn ERESOLVE     package: {},
+30 warn ERESOLVE     whileInstalling: {
+30 warn ERESOLVE       name: 'react-native-reanimated',
+30 warn ERESOLVE       version: '4.1.5',
+30 warn ERESOLVE       path: '/Users/simonyannick/Apps/convecta/node_modules/react-native-reanimated'
+30 warn ERESOLVE     },
+30 warn ERESOLVE     location: 'node_modules/react-native-worklets',
+30 warn ERESOLVE     isWorkspace: false,
+30 warn ERESOLVE     dependents: [ [Object] ]
+30 warn ERESOLVE   },
+30 warn ERESOLVE   force: false,
+30 warn ERESOLVE   isMine: true,
+30 warn ERESOLVE   strictPeerDeps: false,
+30 warn ERESOLVE   current: {
+30 warn ERESOLVE     name: 'react-native-worklets',
+30 warn ERESOLVE     version: undefined,
+30 warn ERESOLVE     errors: [ [FetchError] ],
+30 warn ERESOLVE     package: {},
+30 warn ERESOLVE     location: 'node_modules/react-native-worklets',
+30 warn ERESOLVE     isWorkspace: false,
+30 warn ERESOLVE     dependents: []
+30 warn ERESOLVE   }
+30 warn ERESOLVE }
+31 silly tarball no local data for https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz. Extracting by manifest.
+32 http fetch GET https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz attempt 1 failed with ENOTFOUND
+33 http fetch GET https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz attempt 2 failed with ENOTFOUND
+34 http fetch GET https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz attempt 3 failed with ENOTFOUND
+35 verbose type system
+36 verbose stack FetchError: request to https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+36 verbose stack     at ClientRequest.<anonymous> (/Users/simonyannick/.nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/minipass-fetch/lib/index.js:130:14)
+36 verbose stack     at ClientRequest.emit (node:events:524:28)
+36 verbose stack     at emitErrorEvent (node:_http_client:101:11)
+36 verbose stack     at _destroy (node:_http_client:884:9)
+36 verbose stack     at onSocketNT (node:_http_client:904:5)
+36 verbose stack     at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+37 error code ENOTFOUND
+38 error syscall getaddrinfo
+39 error errno ENOTFOUND
+40 error network request to https://registry.npmjs.org/@aws-cdk/cloud-assembly-schema/-/cloud-assembly-schema-43.12.0.tgz failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+41 error network This is a problem related to network connectivity.
+41 error network In most cases you are behind a proxy or have bad network settings.
+41 error network
+41 error network If you are behind a proxy, please make sure that the
+41 error network 'proxy' config is set properly.  See: 'npm help config'
+42 silly unfinished npm timer reify 1764425593141
+43 silly unfinished npm timer reify:loadTrees 1764425593141
+44 silly unfinished npm timer idealTree:buildDeps 1764425594749
+45 silly unfinished npm timer idealTree:node_modules/@aws-amplify/data-construct/node_modules/@aws-cdk/cloud-assembly-schema 1764425734802
+46 verbose cwd /Users/simonyannick/Apps/convecta
+47 verbose os Darwin 25.1.0
+48 verbose node v20.19.5
+49 verbose npm  v10.8.2
+50 verbose exit 1
+51 verbose code 1
+52 error A complete log of this run can be found in: /Users/simonyannick/Apps/convecta/.npm-cache/_logs/2025-11-29T14_13_12_921Z-debug-0.log
