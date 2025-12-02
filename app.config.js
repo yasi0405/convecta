@@ -3,7 +3,10 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 /** @type {import('@expo/config').ExpoConfig} */
-module.exports = ({ config }) => ({
+module.exports = ({ config, mode }) => {
+  const isDev = mode === "development";
+
+  return ({
   ...config,
   expo: {
     name: "convecta",
@@ -65,7 +68,8 @@ module.exports = ({ config }) => ({
         },
       ],
       ["expo-camera"],
-      ["expo-dev-client"],
+      // Only include expo-dev-client in development builds
+      ...(isDev ? [["expo-dev-client"]] : []),
       [
         "@rnmapbox/maps",
         {
@@ -93,3 +97,4 @@ module.exports = ({ config }) => ({
     },
   },
 });
+};
