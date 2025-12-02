@@ -18,7 +18,6 @@
     "@aws-amplify/ui-react-core": "^3.4.3",
     "@aws-amplify/ui-react-native": "^2.6.0",
     "@expo/vector-icons": "^14.1.0",
-
     "@mapbox/mapbox-gl-geocoder": "^5.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "^11.4.1",
@@ -30,15 +29,12 @@
     "@turf/buffer": "^7.2.0",
     "@turf/helpers": "^7.2.0",
     "aws-amplify": "^6.15.8",
-
     "expo": "~54.0.7",
-
     "expo-asset": "~12.0.8",
     "expo-audio": "~1.0.13",
     "expo-blur": "~14.1.5",
     "expo-camera": "~17.0.9",
     "expo-constants": "~18.0.8",
-    "expo-dev-client": "~5.2.4",
     "expo-font": "~14.0.8",
     "expo-gl": "~15.1.7",
     "expo-haptics": "~14.1.4",
@@ -53,9 +49,7 @@
     "expo-system-ui": "~5.0.11",
     "expo-updates": "~29.0.10",
     "expo-web-browser": "~14.2.0",
-
     "mapbox-gl": "^2.15.0",
-
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
@@ -70,7 +64,6 @@
     "react-native-vision-camera": "^4.7.2",
     "react-native-web": "~0.21.0",
     "react-native-webview": "13.15.0",
-
     "three": "^0.166.0",
     "three-stdlib": "^2.32.1"
   },
@@ -80,9 +73,7 @@
     "@babel/core": "^7.23.0",
     "@babel/generator": "^7.23.0",
     "@babel/types": "^7.23.0",
-
     "@types/react": "~19.1.0",
-
     "aws-cdk-lib": "^2.189.1",
     "babel-plugin-module-resolver": "^5.0.2",
     "constructs": "^10.4.2",
@@ -90,7 +81,6 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
     "tsx": "^4.20.3",
-
     "typescript": "~5.9.2"
   },
   "expo": {
