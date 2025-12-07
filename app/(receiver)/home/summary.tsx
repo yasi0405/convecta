@@ -133,7 +133,7 @@ export default function ParcelSummary() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Résumé du colis</Text>
 

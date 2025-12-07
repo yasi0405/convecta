@@ -25,7 +25,7 @@ export default function IncomingScreen() {
     selectedFilter?.key === 'ALL' ? 'Aucun colis à recevoir pour le moment' : 'Aucun colis dans cette catégorie';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.listContent}

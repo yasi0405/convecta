@@ -8,15 +8,8 @@ import {
 import Colors from "@/theme/Colors";
 import { RECEIVER_CONTENT_TOP_SPACING } from "@constants/index";
 import React, { useMemo, useState } from "react";
-import {
-  FlatList,
-  RefreshControl,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PendingScreen() {
   const {
@@ -46,7 +39,7 @@ export default function PendingScreen() {
       : "Aucun colis dans cette catégorie";
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.listContent}

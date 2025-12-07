@@ -1,13 +1,14 @@
 import { useFonts } from 'expo-font';
 import { Stack, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import 'react-native-reanimated';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ParcelProvider } from '@/context/ParcelContext';
 import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
 import { Amplify } from "aws-amplify";
+import * as LocalAuthentication from "expo-local-authentication";
 
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import Colors from "@/theme/Colors";
@@ -19,13 +20,15 @@ Amplify.configure(outputs);
 
 // 🔹 Composant interne : utilise les hooks de contexte DANS les Providers
 function AppShell() {
-  const { signOut } = useAuthenticator();    
+  const { signOut, authStatus } = useAuthenticator((context) => [context.authStatus]);    
   const theme = useTheme();   
   const pathname = usePathname();
   const segments = useSegments() as string[]; 
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const insets = useSafeAreaInsets();
+  const [biometricVerified, setBiometricVerified] = useState(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
@@ -33,10 +36,77 @@ function AppShell() {
   const hideTopBar = pathname?.startsWith("/home/onboarding") || isLiveNav;
   const isProfile = pathname?.startsWith("/profile");
 
+  const requestBiometric = useCallback(async () => {
+    setBiometricBusy(true);
+    setBiometricError(null);
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !enrolled) {
+        setBiometricVerified(true); // pas de biométrie dispo, on ne bloque pas
+        return;
+      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Déverrouiller avec Face ID / empreinte",
+        fallbackLabel: "Utiliser le code",
+      });
+      if (result.success) {
+        setBiometricVerified(true);
+      } else {
+        setBiometricError("Authentification biométrique requise pour continuer");
+      }
+    } catch (e: any) {
+      setBiometricError(e?.message || "Biométrie indisponible");
+    } finally {
+      setBiometricBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authStatus === "authenticated") {
+      setBiometricVerified(false);
+      requestBiometric();
+    } else {
+      setBiometricVerified(false);
+      setBiometricError(null);
+    }
+  }, [authStatus, requestBiometric]);
+
+  if (authStatus === "authenticated" && !biometricVerified) {
+    return (
+      <SafeAreaView style={[styles.container, styles.biometricGate]}>
+        <View style={styles.biometricCard}>
+          <IconSymbol name="faceid" color={Colors.accent} size={36} />
+          <Text style={styles.biometricTitle}>Déverrouiller</Text>
+          <Text style={styles.biometricSubtitle}>
+            Utilise Face ID / empreinte pour accéder à ton compte.
+          </Text>
+          {biometricError ? <Text style={styles.biometricError}>{biometricError}</Text> : null}
+          <View style={styles.biometricActions}>
+            <TouchableOpacity
+              style={[styles.bioButton, styles.bioPrimary, biometricBusy && { opacity: 0.6 }]}
+              onPress={requestBiometric}
+              disabled={biometricBusy}
+            >
+              <Text style={styles.bioPrimaryText}>{biometricBusy ? "Vérification…" : "Continuer"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.bioButton, styles.bioSecondary]}
+              onPress={() => signOut()}
+              disabled={biometricBusy}
+            >
+              <Text style={styles.bioSecondaryText}>Changer de compte</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {!hideTopBar && (
-        <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) }]}>
+        <View style={[styles.topBar, { paddingTop: 0 }]}>
           {/* ✅ Switch global pour changer de rôle immédiatement */}
           {isProfile ? (
             <TouchableOpacity
@@ -168,7 +238,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingBottom: 4,
+    paddingVertical: 8,
     marginHorizontal: 12,
     zIndex: 10,
   },
@@ -245,6 +315,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     padding: 24,
     justifyContent: "flex-start",
+    zIndex: 1000,
+    elevation: 1000,
   },
   menuHeader: {
     flexDirection: "row",
@@ -272,4 +344,27 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 18,
   },
+  biometricGate: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  biometricCard: {
+    width: "100%",
+    borderRadius: 18,
+    padding: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 10,
+  },
+  biometricTitle: { color: Colors.text, fontSize: 20, fontWeight: "800" },
+  biometricSubtitle: { color: Colors.textSecondary },
+  biometricError: { color: "#ff6b6b", fontWeight: "700" },
+  biometricActions: { flexDirection: "row", gap: 12, marginTop: 6 },
+  bioButton: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  bioPrimary: { backgroundColor: Colors.accent },
+  bioPrimaryText: { color: Colors.background, fontWeight: "800" },
+  bioSecondary: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.input },
+  bioSecondaryText: { color: Colors.text, fontWeight: "700" },
 });

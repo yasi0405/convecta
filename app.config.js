@@ -31,6 +31,8 @@ module.exports = ({ config, mode }) => {
           "Nous utilisons votre position pour centrer la carte et proposer des livraisons à proximité.",
         NSPhotoLibraryAddUsageDescription:
           "Enregistrer les images scannées pour vérification KYC.",
+        NSFaceIDUsageDescription:
+          "Face ID est utilisé pour sécuriser la connexion et déverrouiller l'application.",
         LSApplicationQueriesSchemes: ["whatsapp", "whatsapp-business"],
       },
     },
@@ -46,6 +48,7 @@ module.exports = ({ config, mode }) => {
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
       ],
       package: "com.yasi82.convecta",
     },

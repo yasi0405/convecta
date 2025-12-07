@@ -901,7 +901,7 @@ useEffect(() => {
       !selectedDestination || (selectedDestination.id === "loop" && !loopDuration);
 
     return (
-      <SafeAreaView style={styles.pickScreen}>
+      <SafeAreaView style={styles.pickScreen} edges={["left", "right", "bottom"]}>
         <ScrollView contentContainerStyle={styles.heroContent}>
           <Text style={styles.heroTitle}>Où souhaitez-vous aller aujourd'hui ?</Text>
           <Text style={styles.heroSubtitle}>Convecta relie les routes, vous choisissez la direction.</Text>
@@ -1041,7 +1041,7 @@ useEffect(() => {
       return null;
     }
     return (
-      <SafeAreaView style={styles.pickScreen}>
+      <SafeAreaView style={styles.pickScreen} edges={["left", "right", "bottom"]}>
         <View style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={{ paddingBottom: 180 }}>
             <View style={[styles.offerHeader, { paddingHorizontal: 20 }]}>

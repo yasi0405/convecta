@@ -1,4 +1,44 @@
-import type { Parcel } from '../types.js';
+import type { Parcel, ParcelStatus } from '../types.js';
+import type { Schema } from "@amplify/data/resource";
+import { generateClient } from "aws-amplify/data";
+
+const client = generateClient<Schema>();
+
+type BackendParcel = Schema["Parcel"]["type"];
+
+// Cache local pour refléter immédiatement l'état confirmé même si le backend mock/fallback est utilisé.
+const localStatusOverrides = new Map<
+  string,
+  { status: ParcelStatus; proposedWindow?: { startISO: string; endISO: string } | null }
+>();
+
+function mapStatusFromBackend(status?: BackendParcel["status"] | null): ParcelStatus | null {
+  switch (status) {
+    case "AVAILABLE":
+      return "AWAITING_RECEIVER_CONFIRMATION";
+    case "ASSIGNED":
+      return "AWAITING_PICKUP";
+    case "IN_PROGRESS":
+    case "DELIVERING":
+      return "IN_TRANSIT";
+    case "DELIVERED":
+      return "DELIVERED";
+    default:
+      return null;
+  }
+}
+
+function applyLocalOverrides(parcels: Parcel[]): Parcel[] {
+  return parcels.map((p) => {
+    const override = localStatusOverrides.get(p.id);
+    if (!override) return p;
+    return {
+      ...p,
+      status: override.status,
+      proposedWindow: override.proposedWindow ?? p.proposedWindow,
+    };
+  });
+}
 
 // NOTE: branchement Amplify à réaliser ici quand ton schéma est prêt.
 // Pour l’instant, on renvoie des données mockées pour débloquer l’écran.
@@ -46,11 +86,40 @@ async function mockIncomingParcels(): Promise<Parcel[]> {
 }
 
 export async function listIncomingParcels(): Promise<Parcel[]> {
-  return mockIncomingParcels();
+  try {
+    const res = await client.models.Parcel.list(
+      { authMode: "userPool" }
+    );
+    const items = Array.isArray(res?.data) ? res.data : (res as any)?.items ?? [];
+    const mapped: Parcel[] = items
+      .map((item: any) => {
+        const status = mapStatusFromBackend(item?.status);
+        if (!status) return null;
+        return {
+          id: String(item?.id ?? ""),
+          code: item?.code ?? item?.id,
+          senderName: item?.owner ?? "Client",
+          pickupAddressLabel: item?.adresseDepart,
+          dropoffAddressLabel: item?.adresseArrivee,
+          status,
+          proposedWindow: item?.proposedWindow ?? null,
+          createdAtISO: item?.createdAt ?? new Date().toISOString(),
+        } satisfies Parcel;
+      })
+      .filter(Boolean) as Parcel[];
+
+    if (mapped.length) {
+      return applyLocalOverrides(mapped);
+    }
+  } catch (e) {
+    console.log("listIncomingParcels fallback to mock:", e);
+  }
+
+  return applyLocalOverrides(await mockIncomingParcels());
 }
 
 export async function getIncomingParcel(id: string): Promise<Parcel> {
-  const parcels = await mockIncomingParcels();
+  const parcels = applyLocalOverrides(await mockIncomingParcels());
   const parcel = parcels.find((p) => p.id === id);
   if (!parcel) {
     throw new Error('Colis introuvable');
@@ -63,8 +132,23 @@ export async function confirmReceptionWindow(
   startISO: string,
   endISO: string
 ): Promise<{ ok: true }> {
-  await new Promise((r) => setTimeout(r, 400));
-  // Ici: mutation Amplify pour confirmer le créneau
-  console.log('CONFIRM WINDOW', { parcelId, startISO, endISO });
+  const window = { startISO, endISO };
+
+  try {
+    await client.models.Parcel.update(
+      {
+        id: parcelId,
+        status: "ASSIGNED", // correspond à "en attente de prise en charge" côté UI
+        updatedAt: new Date().toISOString(),
+      } as any,
+      { authMode: "userPool" }
+    );
+  } catch (e) {
+    console.log("confirmReceptionWindow (fallback mock):", e);
+  } finally {
+    // Même en cas d'erreur réseau, on reflète localement le nouveau statut + créneau sélectionné
+    localStatusOverrides.set(parcelId, { status: "AWAITING_PICKUP", proposedWindow: window });
+  }
+
   return { ok: true };
 }
