@@ -1,6 +1,9 @@
 import type { Schema } from "@amplify/data/resource";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import { generateClient } from "aws-amplify/data";
 import type { ConvectaUser, RecipientUser } from "../types";
+
+ensureAmplifyConfigured();
 
 const client = generateClient<Schema>();
 

@@ -1,6 +1,7 @@
 // app/(courier)/navigate.tsx
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import Colors from "@/theme/Colors";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import type { Schema } from "@amplify/data/resource";
 import MapboxGL from "@rnmapbox/maps";
 import { getCurrentUser } from "aws-amplify/auth";
@@ -25,6 +26,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+ensureAmplifyConfigured();
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string;
 const HAS_MAPBOX = Platform.OS !== "web" && !!(MapboxGL as any)?.MapView && !!MAPBOX_TOKEN;
@@ -329,6 +332,85 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     goBackToDest();
   };
 
+  const findAvailableParcelAlongRoute = useCallback(async () => {
+    if (!courierId) return null;
+    const anchors: Coords[] = [];
+    if (routeCoords?.length) anchors.push(...routeCoords.map(([lng, lat]) => ({ lat, lng })));
+    if (previewRoute?.length) anchors.push(...previewRoute.map(([lng, lat]) => ({ lat, lng })));
+    if (selectedDestination?.coords) anchors.push(selectedDestination.coords);
+    if (origin) anchors.push(origin);
+    if (!anchors.length) return null;
+
+    try {
+      setParcelSyncLoading(true);
+      const res = await client.models.Parcel.list(
+        {
+          filter: { status: { eq: "AVAILABLE" } },
+          limit: 100,
+          authMode: "userPool",
+        } as any
+      );
+      const candidates = extractParcels(res);
+      let best: any = null;
+      let bestDistKm = Infinity;
+
+      for (const item of candidates) {
+        const pickupAddress = item?.adresseDepart?.trim?.();
+        const dropoffAddress = item?.adresseArrivee?.trim?.();
+        if (!pickupAddress || !dropoffAddress) continue;
+        const geoPickup = await geocodePlaces(pickupAddress);
+        const coord = geoPickup?.[0]?.coords;
+        if (!coord) continue;
+        const distKm = anchors.reduce((min, pt) => Math.min(min, distanceBetween(pt, coord)), Infinity);
+        if (distKm < bestDistKm) {
+          best = item;
+          bestDistKm = distKm;
+        }
+      }
+
+      // Plan A: colis à moins de 5 km du trajet actuel
+      if (best && bestDistKm <= 5) {
+        try {
+          await client.models.Parcel.update(
+            {
+              id: best.id,
+              assignedTo: courierId,
+              status: "ASSIGNED",
+              updatedAt: new Date().toISOString(),
+            } as any,
+            { authMode: "userPool" }
+          );
+        } catch (e) {
+          console.log("Auto-assign available parcel (corridor) failed:", e);
+        }
+        return best;
+      }
+
+      // Plan B: alternative trajet, accepte un détour raisonnable (<= 15 km du trajet ou départ)
+      if (best && bestDistKm <= 15) {
+        try {
+          await client.models.Parcel.update(
+            {
+              id: best.id,
+              assignedTo: courierId,
+              status: "ASSIGNED",
+              updatedAt: new Date().toISOString(),
+            } as any,
+            { authMode: "userPool" }
+          );
+        } catch (e) {
+          console.log("Auto-assign available parcel (detour) failed:", e);
+        }
+        return best;
+      }
+    } catch (e) {
+      console.log("findAvailableParcelAlongRoute error:", e);
+    } finally {
+      setParcelSyncLoading(false);
+    }
+    return null;
+  }, [courierId, origin, previewRoute, routeCoords, selectedDestination]);
+
   const fetchActiveParcel = useCallback(async () => {
     if (!courierId) return null;
     try {
@@ -349,8 +431,13 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
       const parcels = extractParcels(res);
       const parcel = parcels.find((p: any) => p?.id);
       if (!parcel) {
+        const available = await findAvailableParcelAlongRoute();
+        if (available) {
+          setActiveParcel(available);
+          return available;
+        }
         setParcelSyncError(
-          "Aucun colis assigné. Ajoute un colis via l’onglet « Mes colis » avant de démarrer la navigation."
+          "Aucun colis disponible automatiquement sur ton trajet pour le moment. Nous attribuons les colis proches de ton itinéraire : ajuste ta destination ou réessaie dans un instant."
         );
         return null;
       }
@@ -362,7 +449,7 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
     } finally {
       setParcelSyncLoading(false);
     }
-  }, [courierId]);
+  }, [courierId, findAvailableParcelAlongRoute]);
 
   const ensureParcelWaypoints = useCallback(
     async (parcel: { adresseDepart?: string | null; adresseArrivee?: string | null }) => {
@@ -603,8 +690,12 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
   }, [pauseActive]);
 
   const handleOpenScanner = async () => {
-    if (!activeParcel) {
-      Alert.alert("Aucun colis", "Ajoute un colis dans ta liste avant de scanner.");
+    const parcel = activeParcel ?? (await fetchActiveParcel());
+    if (!parcel) {
+      Alert.alert(
+        "Aucun colis",
+        "Aucune attribution automatique n'est disponible sur ton trajet pour le moment. Ajuste l'itinéraire ou réessaie dans quelques minutes."
+      );
       return;
     }
     if (!permission?.granted) {
@@ -684,7 +775,7 @@ const loopMinutesIndex = Math.max(0, LOOP_MINUTE_OPTIONS.indexOf(loopMinutesValu
 
   const startLiveNavigation = async (_durationOverride?: number) => {
     if (!selectedDestination || !selectedOffer) return;
-    const parcel = activeParcel ?? (await fetchActiveParcel());
+    const parcel = await fetchActiveParcel();
     if (!parcel) return;
     const coords = (parcelWaypoints ?? (await ensureParcelWaypoints(parcel))) ?? null;
     if (!coords?.pickup || !coords?.dropoff) return;
@@ -1412,7 +1503,8 @@ useEffect(() => {
         <View style={styles.confirmCard}>
           <Text style={styles.confirmTitle}>Colis requis</Text>
           <Text style={styles.confirmMessage}>
-            {parcelSyncError ?? "Ajoute un colis dans ta liste avant de démarrer une navigation."}
+            {parcelSyncError ??
+              "Aucun colis n'a pu être attribué automatiquement sur ton trajet. Modifie l'itinéraire ou réessaie dans quelques instants."}
           </Text>
           <TouchableOpacity
             style={[styles.confirmBtn, styles.confirmBtnPrimary]}
@@ -1823,10 +1915,9 @@ const styles = StyleSheet.create({
   offerCardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   offerCardActive: {
     borderColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    boxShadow: [
+      { offsetX: 0, offsetY: 6, blurRadius: 16, color: "rgba(68, 222, 172, 0.25)" },
+    ],
   },
   offerCardTitle: { color: Colors.text, fontSize: 18, fontWeight: "700" },
   offerHourly: { color: Colors.accent, fontSize: 16, fontWeight: "700" },

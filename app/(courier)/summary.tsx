@@ -1,5 +1,6 @@
 import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import React, { useEffect, useState } from "react";
@@ -13,6 +14,8 @@ import {
 import type { Schema } from "../../amplify/data/resource"; // ajuste si besoin
 
 type Parcel = Schema["Parcel"]["type"];
+
+ensureAmplifyConfigured();
 
 export default function CourierSummary() {
   const client = generateClient<Schema>();

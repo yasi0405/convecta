@@ -1,8 +1,11 @@
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ParcelWithAssign } from "../types";
+
+ensureAmplifyConfigured();
 
 const client = generateClient<any>();
 

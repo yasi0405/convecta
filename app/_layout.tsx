@@ -1,26 +1,102 @@
+import { ensureAmplifyConfigured } from "@/lib/amplify";
+import 'react-native-get-random-values';
+import 'react-native-reanimated';
+import 'react-native-url-polyfill/auto';
+ensureAmplifyConfigured();
+
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import { ParcelProvider } from '@/context/ParcelContext';
+import Colors from "@/theme/Colors";
+import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { useFonts } from 'expo-font';
 import { Stack, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import 'react-native-reanimated';
+import { NativeModules, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+type LocalAuthModule = typeof import("expo-local-authentication");
 
-import { ParcelProvider } from '@/context/ParcelContext';
-import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
-import { Amplify } from "aws-amplify";
-import * as LocalAuthentication from "expo-local-authentication";
+const { Authenticator, useAuthenticator } =
+  require("@aws-amplify/ui-react-native") as typeof import("@aws-amplify/ui-react-native");
+const {
+  ThemeProvider: AmplifyThemeProvider,
+} = require("@aws-amplify/ui-react-native/dist/theme") as typeof import("@aws-amplify/ui-react-native/dist/theme");
+type AmplifyTheme = import("@aws-amplify/ui-react-native/dist/theme").Theme;
 
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import Colors from "@/theme/Colors";
-import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import outputs from "../amplify_outputs.json";
-
-Amplify.configure(outputs);
+const amplifyAuthTheme: AmplifyTheme = {
+  tokens: {
+    colors: {
+      background: {
+        primary: Colors.background,
+        secondary: Colors.card,
+        tertiary: Colors.input,
+        disabled: Colors.card,
+      },
+      font: {
+        primary: Colors.text,
+        secondary: Colors.textSecondary,
+        inverse: Colors.buttonText,
+        interactive: Colors.accent,
+        active: Colors.accent,
+      },
+      border: {
+        primary: Colors.border,
+        focus: Colors.accent,
+        pressed: Colors.accent,
+      },
+      primary: {
+        10: Colors.accent,
+        20: Colors.accent,
+        40: Colors.accent,
+        60: Colors.accent,
+        80: Colors.accent,
+        90: Colors.accent,
+        100: Colors.accent,
+      },
+      brand: {
+        primary: {
+          10: Colors.accent,
+          20: Colors.accent,
+          40: Colors.accent,
+          60: Colors.accent,
+          80: Colors.accent,
+          90: Colors.accent,
+          100: Colors.accent,
+        },
+      },
+    },
+  },
+  components: {
+    button: {
+      container: { borderRadius: 12 },
+      containerPrimary: { backgroundColor: Colors.accent },
+      text: { fontWeight: "700" },
+      textPrimary: { color: Colors.buttonText, fontWeight: "800" },
+    },
+    textField: {
+      fieldContainer: {
+        backgroundColor: Colors.input,
+        borderColor: Colors.border,
+        borderWidth: 1,
+      },
+      field: { color: Colors.text },
+      label: { color: Colors.textSecondary },
+    },
+    heading: () => ({
+      text: { color: Colors.text },
+      1: {},
+      2: {},
+      3: {},
+      4: {},
+      5: {},
+      6: {},
+    }),
+  },
+};
 
 // 🔹 Composant interne : utilise les hooks de contexte DANS les Providers
 function AppShell() {
-  const { signOut, authStatus } = useAuthenticator((context) => [context.authStatus]);    
+  const { signOut, authStatus } = useAuthenticator((context) => [context.authStatus]);
   const theme = useTheme();   
   const pathname = usePathname();
   const segments = useSegments() as string[]; 
@@ -29,6 +105,7 @@ function AppShell() {
   const [biometricVerified, setBiometricVerified] = useState(false);
   const [biometricError, setBiometricError] = useState<string | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [localAuth, setLocalAuth] = useState<LocalAuthModule | null>(null);
 
   // Exemple de segments: ['(courier)', 'navigate'] ou ['(receiver)', 'home']
   const isCourier = segments?.includes('(courier)');
@@ -36,17 +113,42 @@ function AppShell() {
   const hideTopBar = pathname?.startsWith("/home/onboarding") || isLiveNav;
   const isProfile = pathname?.startsWith("/profile");
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (Platform.OS === "web" || !NativeModules.ExpoLocalAuthentication) {
+          if (active) setLocalAuth(null);
+          return;
+        }
+        const mod = await import("expo-local-authentication");
+        if (active) setLocalAuth(mod);
+      } catch (e) {
+        console.log("LocalAuthentication unavailable:", e);
+        if (active) setLocalAuth(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const requestBiometric = useCallback(async () => {
     setBiometricBusy(true);
     setBiometricError(null);
     try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!localAuth) {
+        // Module absent (e.g., dev build without native module) → don't block the user
+        setBiometricVerified(true);
+        return;
+      }
+      const hasHardware = await localAuth.hasHardwareAsync();
+      const enrolled = await localAuth.isEnrolledAsync();
       if (!hasHardware || !enrolled) {
         setBiometricVerified(true); // pas de biométrie dispo, on ne bloque pas
         return;
       }
-      const result = await LocalAuthentication.authenticateAsync({
+      const result = await localAuth.authenticateAsync({
         promptMessage: "Déverrouiller avec Face ID / empreinte",
         fallbackLabel: "Utiliser le code",
       });
@@ -60,7 +162,7 @@ function AppShell() {
     } finally {
       setBiometricBusy(false);
     }
-  }, []);
+  }, [localAuth]);
 
   useEffect(() => {
     if (authStatus === "authenticated") {
@@ -160,7 +262,6 @@ function AppShell() {
           headerBackVisible: false,  // et donc aucun bouton “back”
         }}
       >
-        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
 
@@ -217,10 +318,12 @@ export default function RootLayout() {
       <ParcelProvider>
         <ThemeProvider>
           <Authenticator.Provider>
-            <Authenticator>
-              {/* ✅ Tous les hooks de contexte sont appelés dans AppShell */}
-              <AppShell />
-            </Authenticator>
+            <AmplifyThemeProvider theme={amplifyAuthTheme} colorMode="dark">
+              <Authenticator>
+                {/* ✅ Tous les hooks de contexte sont appelés dans AppShell */}
+                <AppShell />
+              </Authenticator>
+            </AmplifyThemeProvider>
           </Authenticator.Provider>
         </ThemeProvider>
       </ParcelProvider>

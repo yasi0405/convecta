@@ -1,4 +1,5 @@
 import Colors from "@/theme/Colors";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import type { Schema } from "@amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -6,6 +7,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RECEIVER_CONTENT_TOP_SPACING } from "@constants/index";
+
+ensureAmplifyConfigured();
 
 // —— Services (isolés) ——
 function getClient() {

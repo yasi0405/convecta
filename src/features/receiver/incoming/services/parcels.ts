@@ -1,6 +1,9 @@
 import type { Parcel, ParcelStatus } from '../types.js';
 import type { Schema } from "@amplify/data/resource";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import { generateClient } from "aws-amplify/data";
+
+ensureAmplifyConfigured();
 
 const client = generateClient<Schema>();
 

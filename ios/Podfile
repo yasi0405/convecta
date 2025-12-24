@@ -66,22 +66,5 @@ target 'convecta' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-    # Fix CocoaPods DEFINES_MODULE conflict for some Expo-related pods
-    problematic = %w[expo-dev-menu Main ReactNativeCompatibles SafeAreaView Vendored]
-
-    installer.pods_project.targets.each do |target|
-      next unless problematic.include?(target.name)
-
-      target.build_configurations.each do |config|
-        config.build_settings['DEFINES_MODULE'] = 'NO'
-      end
-    end
-
-    # SECOND PASS — force DEFINES_MODULE = NO for ALL pods to eliminate merge conflicts
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['DEFINES_MODULE'] = 'NO'
-      end
-    end
   end
 end

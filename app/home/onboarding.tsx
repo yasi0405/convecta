@@ -31,10 +31,9 @@ function Card({ children, accent = false, style = {} as any }: { children?: Reac
         borderColor: Colors.border,
         padding: 14,
         gap: 10,
-        shadowColor: Colors.black,
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 3 },
+        boxShadow: [
+          { offsetX: 0, offsetY: 3, blurRadius: 8, color: "rgba(0, 0, 0, 0.2)" },
+        ],
         ...style,
       }}
     >

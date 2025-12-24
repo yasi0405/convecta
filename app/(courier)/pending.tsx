@@ -1,6 +1,7 @@
 import { Parcel as ParcelCtx, useParcelContext } from "@/context/ParcelContext";
 import Colors from "@/theme/Colors";
 import { IconSymbol } from "@/components/ui/IconSymbol";
+import { ensureAmplifyConfigured } from "@/lib/amplify";
 import { getCurrentUser } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,6 +38,8 @@ type Parcel = Omit<ParcelCtx, "status"> & {
   createdAt?: string | null;
   updatedAt?: string | null;
 };
+
+ensureAmplifyConfigured();
 
 const client = generateClient<any>();
 
