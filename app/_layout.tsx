@@ -12,7 +12,7 @@ import { useFonts } from 'expo-font';
 import { Stack, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { NativeModules, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Alert, TouchableWithoutFeedback, Keyboard, Modal } from 'react-native';
+import { NativeModules, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, Animated, Easing, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 type LocalAuthModule = typeof import("expo-local-authentication");
@@ -379,31 +379,44 @@ function FaceIdTestButton() {
 }
 
 function SignInWithFaceIdDialog(props: any) {
-  const [open, setOpen] = useState(false);
+  const { handleChange, handleSubmit, fields, ...rest } = props;
+  const prefillRan = useRef(false);
+  const autoSubmitted = useRef(false);
+
+  useEffect(() => {
+    if (prefillRan.current) return;
+    prefillRan.current = true;
+    let cancelled = false;
+    (async () => {
+      const creds = await loadCredentials();
+      if (cancelled || !creds) return;
+      if (creds.username) handleChange?.({ name: "username", value: creds.username });
+      if (creds.password) handleChange?.({ name: "password", value: creds.password });
+      if (creds.username && creds.password && !autoSubmitted.current) {
+        autoSubmitted.current = true;
+        handleSubmit?.({ username: creds.username, password: creds.password });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [handleChange, handleSubmit]);
+
+  const onSubmit = useCallback(
+    (values: any) => {
+      if (values?.username || values?.password) {
+        latestCredentialsRef.current = {
+          username: values.username || values.email || "",
+          password: values.password || "",
+        };
+      }
+      return handleSubmit?.(values);
+    },
+    [handleSubmit]
+  );
 
   return (
-    <>
-      <AmplifySignIn {...props} />
-      <TouchableOpacity style={styles.faceIdTrigger} onPress={() => setOpen(true)}>
-        <Text style={styles.faceIdTriggerText}>Tester Face ID</Text>
-      </TouchableOpacity>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <TouchableWithoutFeedback onPress={() => setOpen(false)}>
-          <View style={styles.faceIdModalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.faceIdModalCard}>
-                <Text style={styles.faceIdModalTitle}>Test Face ID</Text>
-                <Text style={styles.faceIdModalSubtitle}>Lance une authentification pour vérifier le prompt.</Text>
-                <FaceIdTestButton />
-                <TouchableOpacity style={[styles.bioButton, styles.bioSecondary]} onPress={() => setOpen(false)}>
-                  <Text style={styles.bioSecondaryText}>Fermer</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    </>
+    <AmplifySignIn {...rest} fields={fields} handleChange={handleChange} handleSubmit={onSubmit} />
   );
 }
 
@@ -726,39 +739,4 @@ const styles = StyleSheet.create({
   bioPrimaryText: { color: Colors.background, fontWeight: "800" },
   bioSecondary: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.input },
   bioSecondaryText: { color: Colors.text, fontWeight: "700" },
-  faceIdTrigger: {
-    alignSelf: "center",
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  faceIdTriggerText: {
-    color: Colors.accent,
-    fontWeight: "700",
-  },
-  faceIdModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  faceIdModalCard: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 12,
-  },
-  faceIdModalTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  faceIdModalSubtitle: {
-    color: Colors.textSecondary,
-  },
 });
