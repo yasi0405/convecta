@@ -10,6 +10,7 @@ const Colors = {
   textOnCard: '#FFFFFF',       // Texte sur fond accentué (ex: vert clair)
   button: '#44DEAC',           // Bouton vert par défaut
   buttonText: '#161D25',       // Texte sur bouton vert
+  error: '#ff6b6b',            // Erreurs / alertes
   white: '#FFFFFF',
   black: '#000000',
 };

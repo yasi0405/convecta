@@ -1,7 +1,7 @@
 // app/home/onboarding.tsx
+import { IconSymbol } from "@/components/ui/IconSymbol";
 import { createReferralInvite, findUserByPhone, getCurrentUserId, getOrCreateProfile, updateProfile, uploadKycImage } from "@/features/user/api";
 import Colors from "@/theme/Colors";
-import { IconSymbol } from "@/components/ui/IconSymbol";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -190,7 +190,14 @@ function useIdScanAutoFill(
       return {};
     }
 
-    const result = await TextRecognition.recognize(uri);
+    let result;
+    try {
+      result = await TextRecognition.recognize(uri);
+    } catch (e: any) {
+      console.warn("OCR recognize() failed", e);
+      Alert.alert("OCR", "Analyse impossible. Merci de refaire une photo nette ou continue en manuel.");
+      return {};
+    }
     const fullText = (result?.text || "").replace(/\t/g, " ");
     const lines = fullText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
 
@@ -437,7 +444,7 @@ export default function Onboarding() {
       {showCamera && (
         <Card style={{ padding: 0 }}>
           <View style={{ height: 480, borderRadius: 14, overflow: "hidden" }}>
-            <CameraView ref={(r) => (cameraRef.current = r)} style={{ flex: 1 }} facing="back" enableTorch={false} />
+            <CameraView ref={(r) => { cameraRef.current = r; }} style={{ flex: 1 }} facing="back" enableTorch={false} />
             {/* Close */}
             <TouchableOpacity
               onPress={() => setShowCamera(false)}
